@@ -1,36 +1,17 @@
-local function IsServerOK()
-
-	if GetConVar( "gmod_physiterations" ):GetInt() < 4 then
-		RunConsoleCommand("gmod_physiterations", "4")
-
-		return false
-	end
-
-	return true
-end
-
 function ENT:Initialize()
 	self:PhysicsInit( SOLID_VPHYSICS )
 	self:SetMoveType( MOVETYPE_VPHYSICS )
 	self:SetSolid( SOLID_VPHYSICS )
 	self:SetNotSolid( true )
 	self:SetUseType( SIMPLE_USE )
-	--self:SetRenderMode( RENDERMODE_TRANSALPHA ) -- fix broken decals
-	self:AddFlags( FL_OBJECT ) -- this allows npcs to see this entity
-
-	if not IsServerOK() then
-
-		self:Remove()
-
-		print("[SIMFPHYS] ERROR COULDN'T INITIALIZE VEHICLE!")
-	end
-
+	self:SetRenderMode( RENDERMODE_TRANSALPHA )
+	self:SetCustomCollisionCheck(true)
+	
 	local PObj = self:GetPhysicsObject()
-
-	if not IsValid( PObj ) then print("[SIMFPHYS] ERROR COULDN'T INITIALIZE VEHICLE! '"..self:GetModel().."' has no physics model!") self:Remove() return end
-
+	if not IsValid( PObj ) then print("[SIMFPHYS] ERROR COULDN'T INITIALIZE VEHICLE! '"..self:GetModel().."' has no physics model!") return end
+	
 	PObj:EnableMotion( false )
-
+	
 	self:SetValues()
 
 	timer.Simple( 0.1, function()
@@ -92,33 +73,6 @@ function ENT:SetupView()
 	return data
 end
 
-function ENT:SetupEnteringAnims()
-	local attachments = self:GetAttachments()
-	
-	self.Exitpoints = {}
-	self.Enterpoints = {}
-	
-	for _,i in pairs(attachments) do
-		local curstring = string.lower( i.name )
-		
-		if string.match( curstring, "exit", 1 ) then
-			table.insert(self.Exitpoints, curstring)
-		end
-		
-		if string.match( curstring, "enter", 1 ) then
-			table.insert(self.Enterpoints, curstring)
-		end
-	end
-	
-	if table.Count( self.Enterpoints ) < 1 then
-		self.Enterpoints = nil
-	end
-	
-	if table.Count( self.Exitpoints ) < 1 then
-		self.Exitpoints = nil
-	end
-end
-
 function ENT:InitializeVehicle()
 	if not IsValid( self ) then return end
 	
@@ -146,14 +100,6 @@ function ENT:InitializeVehicle()
 		physObj:SetInertia( self.Inertia ) 
 	end
 	
-	local tanksize = self.FuelTankSize and self.FuelTankSize or 65
-	local fueltype = self.FuelType and self.FuelType or FUELTYPE_PETROL
-	
-	self:SetMaxFuel( tanksize )
-	self:SetFuel( self:GetMaxFuel() )
-	self:SetFuelType( fueltype )
-	self:SetFuelPos( self.FuelFillPos and self.FuelFillPos or Vector(0,0,0) )
-	
 	local View = self:SetupView()
 	
 	self.DriverSeat = ents.Create( "prop_vehicle_prisoner_pod" )
@@ -168,30 +114,20 @@ function ENT:InitializeVehicle()
 	self.DriverSeat:Spawn()
 	self.DriverSeat:Activate()
 	self.DriverSeat:SetPos( View.ViewPos + self.DriverSeat:GetUp() * (-34 + self.SeatOffset.z) + self.DriverSeat:GetRight() * (self.SeatOffset.y) + self.DriverSeat:GetForward() * (-6 + self.SeatOffset.x) )
-	self.DriverSeat:SetNWInt( "pPodIndex", 1 )
-	
-	if View.ID ~= false then
-		self:SetupEnteringAnims()
-		self.DriverSeat:SetParent( self , View.ID )
-	else
-		self.DriverSeat:SetParent( self )
-	end
-
+	self.DriverSeat:SetParent( self )
 	self.DriverSeat:GetPhysicsObject():EnableDrag( false ) 
 	self.DriverSeat:GetPhysicsObject():EnableMotion( false )
 	self.DriverSeat:GetPhysicsObject():SetMass( 1 )
-
 	self.DriverSeat.fphysSeat = true
 	self.DriverSeat.base = self
 	self.DriverSeat.DoNotDuplicate = true
 	self:DeleteOnRemove( self.DriverSeat )
 	self:SetDriverSeat( self.DriverSeat )
 	self.DriverSeat:SetNotSolid( true )
-	--self.DriverSeat:SetNoDraw( true )
-	self.DriverSeat:SetColor( Color( 255, 255, 255, 0 ) ) 
+	--self.DriverSeat:SetNoDraw( true ) -- nodraw will make the seat NULL on client
+	self.DriverSeat:SetColor( Color( 255, 255, 255, 0 ) ) -- so we set to alpha 0 instead
 	self.DriverSeat:SetRenderMode( RENDERMODE_TRANSALPHA )
 	self.DriverSeat:DrawShadow( false )
-
 	simfphys.SetOwner( self.EntityOwner, self.DriverSeat )
 	
 	if self.PassengerSeats then
@@ -206,38 +142,30 @@ function ENT:InitializeVehicle()
 			self.pSeat[i]:Spawn()
 			self.pSeat[i]:Activate()
 			self.pSeat[i]:SetNotSolid( true )
-			--self.pSeat[i]:SetNoDraw( true )
-			self.pSeat[i]:SetColor( Color( 255, 255, 255, 0 ) ) 
-			self.pSeat[i]:SetRenderMode( RENDERMODE_TRANSALPHA )
-			
+			self.pSeat[i]:SetNoDraw( true )
 			self.pSeat[i].fphysSeat = true
 			self.pSeat[i].base = self
 			self.pSeat[i].DoNotDuplicate = true
 			simfphys.SetOwner( self.EntityOwner, self.pSeat[i] )
 			
 			self.pSeat[i]:DrawShadow( false )
-
 			self.pSeat[i]:GetPhysicsObject():EnableMotion( false )
 			self.pSeat[i]:GetPhysicsObject():EnableDrag(false) 
 			self.pSeat[i]:GetPhysicsObject():SetMass(1)
-	
+			
 			self:DeleteOnRemove( self.pSeat[i] )
 			
 			self.pSeat[i]:SetParent( self )
-			
-			self.pPodKeyIndex = self.pPodKeyIndex and self.pPodKeyIndex + 1 or 2
-	
-			self.pSeat[i]:SetNWInt( "pPodIndex", self.pPodKeyIndex )
 		end
 	end
-
+	
 	if istable(WireLib) then
 		local passengersSeats = istable( self.pSeat ) and self.pSeat or {}
 		WireLib.TriggerOutput(self, "PassengerSeats", passengersSeats )
 		
 		WireLib.TriggerOutput(self, "DriverSeat", self.DriverSeat )
 	end
-
+	
 	if self.Attachments then
 		for i = 1, table.Count( self.Attachments ) do
 			local prop = ents.Create( ((self.Attachments[i].IsGlass == true) and "gmod_sent_vehicle_fphysics_attachment_translucent" or "gmod_sent_vehicle_fphysics_attachment") )
@@ -275,27 +203,74 @@ function ENT:InitializeVehicle()
 			self:DeleteOnRemove( prop )
 		end
 	end
-
-	self:GetVehicleData()
-end
-
-function ENT:GetVehicleData()	
+	self.shiftduration = 0.25
+	local vehiclelist = list.Get( "simfphys_vehicles" )[self:GetSpawn_List()] or false
+	if(vehiclelist) then
+		local shifter = vehiclelist.Members.snd_shifter or "shiftsmall"
+		self.ShiftSound = shifter
+	end
+	self.wheelnum = 1
 	self:SetPoseParameter("vehicle_steer",1) 
 	self:SetPoseParameter("vehicle_wheel_fl_height",1) 
 	self:SetPoseParameter("vehicle_wheel_fr_height",1) 
 	self:SetPoseParameter("vehicle_wheel_rl_height",1) 
 	self:SetPoseParameter("vehicle_wheel_rr_height",1)
+	self.posepositions["Pose0_Steerangle"] = Angle(0,0,0)
+	self.posepositions["Pose0_Pos_FL"] = self:LocalToWorld( self.CustomWheelPosFL )
+	self.posepositions["Pose0_Pos_FR"] = self:LocalToWorld( self.CustomWheelPosFR )
+	self.posepositions["Pose0_Pos_RL"] = self:LocalToWorld( self.CustomWheelPosRL )
+	self.posepositions["Pose0_Pos_RR"] = self:LocalToWorld( self.CustomWheelPosRR )
+	
+	self:SetPoseParameter("vehicle_steer",0) 
+	self:SetPoseParameter("vehicle_wheel_fl_height",0) 
+	self:SetPoseParameter("vehicle_wheel_fr_height",0) 
+	self:SetPoseParameter("vehicle_wheel_rl_height",0) 
+	self:SetPoseParameter("vehicle_wheel_rr_height",0)
 
-	timer.Simple( 0.15, function()
-		if not IsValid(self) then return end
-		self.posepositions["Pose0_Steerangle"] = self.CustomWheels and Angle(0,0,0) or self:GetAttachment( self:LookupAttachment( "wheel_fl" ) ).Ang
-		self.posepositions["Pose0_Pos_FL"] = self.CustomWheels and self:LocalToWorld( self.CustomWheelPosFL ) or self:GetAttachment( self:LookupAttachment( "wheel_fl" ) ).Pos
-		self.posepositions["Pose0_Pos_FR"] = self.CustomWheels and self:LocalToWorld( self.CustomWheelPosFR ) or self:GetAttachment( self:LookupAttachment( "wheel_fr" ) ).Pos
-		self.posepositions["Pose0_Pos_RL"] = self.CustomWheels and self:LocalToWorld( self.CustomWheelPosRL ) or self:GetAttachment( self:LookupAttachment( "wheel_rl" ) ).Pos
-		self.posepositions["Pose0_Pos_RR"] = self.CustomWheels and self:LocalToWorld( self.CustomWheelPosRR ) or self:GetAttachment( self:LookupAttachment( "wheel_rr" ) ).Pos	
-		
-		self:WriteVehicleDataTable()
-	end )
+	self.posepositions["Pose1_Steerangle"] = Angle(0,0,0)
+	self.posepositions["Pose1_Pos_FL"] = self:LocalToWorld( self.CustomWheelPosFL )
+	self.posepositions["Pose1_Pos_FR"] = self:LocalToWorld( self.CustomWheelPosFR )
+	self.posepositions["Pose1_Pos_RL"] = self:LocalToWorld( self.CustomWheelPosRL )
+	self.posepositions["Pose1_Pos_RR"] = self:LocalToWorld( self.CustomWheelPosRR )
+	self.posepositions["PoseL_Pos_FL"] = self:WorldToLocal( self.posepositions.Pose1_Pos_FL )
+	self.posepositions["PoseL_Pos_FR"] = self:WorldToLocal( self.posepositions.Pose1_Pos_FR )
+	self.posepositions["PoseL_Pos_RL"] = self:WorldToLocal( self.posepositions.Pose1_Pos_RL )
+	self.posepositions["PoseL_Pos_RR"] = self:WorldToLocal( self.posepositions.Pose1_Pos_RR )
+	
+	self.VehicleData["suspensiontravel_fl"] = self.FrontHeight
+	self.VehicleData["suspensiontravel_fr"] = self.FrontHeight
+	self.VehicleData["suspensiontravel_rl"] = self.RearHeight
+	self.VehicleData["suspensiontravel_rr"] = self.RearHeight
+	self.VehicleData["steerangle"] = self.CustomSteerAngle
+	
+	local pFL = self.posepositions.Pose0_Pos_FL
+	local pFR = self.posepositions.Pose0_Pos_FR
+	local pRL = self.posepositions.Pose0_Pos_RL
+	local pRR = self.posepositions.Pose0_Pos_RR
+	local pAngL = self:WorldToLocalAngles( ((pFL + pFR) / 2 - (pRL + pRR) / 2):Angle() )
+	pAngL.r = 0
+	pAngL.p = 0
+	
+	self.VehicleData["LocalAngForward"] = pAngL
+	
+	local yAngL = self.VehicleData.LocalAngForward - Angle(0,90,0)
+	yAngL:Normalize() 
+	
+	self.VehicleData["LocalAngRight"] = yAngL
+	self.VehicleData[ "pp_spin_1" ] = "vehicle_wheel_fl_spin"
+	self.VehicleData[ "pp_spin_2" ] = "vehicle_wheel_fr_spin"
+	self.VehicleData[ "pp_spin_3" ] = "vehicle_wheel_rl_spin"
+	self.VehicleData[ "pp_spin_4" ] = "vehicle_wheel_rr_spin"
+	
+	self.Turbo = CreateSound(self, "")
+	self.Blower = CreateSound(self, "")
+	self.BlowerWhine = CreateSound(self, "")
+	self.BlowOff = CreateSound(self, "")
+	self.Scrape = CreateSound(self, "")
+	
+	self:SetFastSteerAngle(self.FastSteeringAngle / self.VehicleData["steerangle"])
+	self:SetNotSolid( false )
+	self:SetupVehicle()
 end
 
 function ENT:ResetJoystick()
@@ -314,10 +289,6 @@ function ENT:ResetJoystick()
 end
 
 function ENT:SetValues()
-	if istable( WireLib ) then
-		self:createWireIO()
-	end
-	
 	self:SetGear( 2 )
 	
 	self.EnableSuspension = 0
@@ -333,7 +304,6 @@ function ENT:SetValues()
 	self.Elastics = {}
 	self.GhostWheels = {}
 	self.PressedKeys = {}
-	self:ResetJoystick()
 	
 	self.ColorableProps = {}
 	self.posepositions = {}
@@ -370,69 +340,6 @@ function ENT:SetValues()
 	end
 	
 	self.VehicleData[ "Steer" ] = 0
-end
-
-function ENT:WriteVehicleDataTable()	
-	self:SetPoseParameter("vehicle_steer",0) 
-	self:SetPoseParameter("vehicle_wheel_fl_height",0) 
-	self:SetPoseParameter("vehicle_wheel_fr_height",0) 
-	self:SetPoseParameter("vehicle_wheel_rl_height",0) 
-	self:SetPoseParameter("vehicle_wheel_rr_height",0)
-	
-	timer.Simple( 0.15, function()
-		if not IsValid(self) then return end
-		self.posepositions["Pose1_Steerangle"] = self.CustomWheels and Angle(0,0,0) or self:GetAttachment( self:LookupAttachment( "wheel_fl" ) ).Ang
-		self.posepositions["Pose1_Pos_FL"] = self.CustomWheels and self:LocalToWorld( self.CustomWheelPosFL ) or self:GetAttachment( self:LookupAttachment( "wheel_fl" ) ).Pos
-		self.posepositions["Pose1_Pos_FR"] = self.CustomWheels and self:LocalToWorld( self.CustomWheelPosFR ) or self:GetAttachment( self:LookupAttachment( "wheel_fr" ) ).Pos
-		self.posepositions["Pose1_Pos_RL"] = self.CustomWheels and self:LocalToWorld( self.CustomWheelPosRL ) or self:GetAttachment( self:LookupAttachment( "wheel_rl" ) ).Pos
-		self.posepositions["Pose1_Pos_RR"] = self.CustomWheels and self:LocalToWorld( self.CustomWheelPosRR ) or self:GetAttachment( self:LookupAttachment( "wheel_rr" ) ).Pos
-		self.posepositions["PoseL_Pos_FL"] = self:WorldToLocal( self.posepositions.Pose1_Pos_FL )
-		self.posepositions["PoseL_Pos_FR"] = self:WorldToLocal( self.posepositions.Pose1_Pos_FR )
-		self.posepositions["PoseL_Pos_RL"] = self:WorldToLocal( self.posepositions.Pose1_Pos_RL )
-		self.posepositions["PoseL_Pos_RR"] = self:WorldToLocal( self.posepositions.Pose1_Pos_RR )
-		
-		self.VehicleData["suspensiontravel_fl"] = self.CustomWheels and self.FrontHeight or math.Round( (self.posepositions.Pose0_Pos_FL - self.posepositions.Pose1_Pos_FL):Length() , 2)
-		self.VehicleData["suspensiontravel_fr"] = self.CustomWheels and self.FrontHeight or math.Round( (self.posepositions.Pose0_Pos_FR - self.posepositions.Pose1_Pos_FR):Length() , 2)
-		self.VehicleData["suspensiontravel_rl"] = self.CustomWheels and self.RearHeight or math.Round( (self.posepositions.Pose0_Pos_RL - self.posepositions.Pose1_Pos_RL):Length() , 2)
-		self.VehicleData["suspensiontravel_rr"] = self.CustomWheels and self.RearHeight or math.Round( (self.posepositions.Pose0_Pos_RR - self.posepositions.Pose1_Pos_RR):Length() , 2)
-		
-		local Figure1 = math.Round( math.acos( math.Clamp(self.posepositions.Pose0_Steerangle:Up():Dot(self.posepositions.Pose1_Steerangle:Up()),-1,1) ) * (180 / math.pi) , 2)
-		local Figure2 = math.Round( math.acos( math.Clamp(self.posepositions.Pose0_Steerangle:Forward():Dot(self.posepositions.Pose1_Steerangle:Forward()),-1,1) ) * (180 / math.pi) , 2)
-		local Figure3 = math.Round( math.acos( math.Clamp(self.posepositions.Pose0_Steerangle:Right():Dot(self.posepositions.Pose1_Steerangle:Right()),-1,1) ) * (180 / math.pi) , 2)
-		self.VehicleData["steerangle"] = self.CustomWheels and self.CustomSteerAngle or math.max(Figure1,Figure2,Figure3)
-		
-		local pFL = self.posepositions.Pose0_Pos_FL
-		local pFR = self.posepositions.Pose0_Pos_FR
-		local pRL = self.posepositions.Pose0_Pos_RL
-		local pRR = self.posepositions.Pose0_Pos_RR
-		local pAngL = self:WorldToLocalAngles( ((pFL + pFR) / 2 - (pRL + pRR) / 2):Angle() )
-		pAngL.r = 0
-		pAngL.p = 0
-		
-		self.VehicleData["LocalAngForward"] = pAngL
-		
-		local yAngL = self.VehicleData.LocalAngForward - Angle(0,90,0)
-		yAngL:Normalize() 
-		
-		self.VehicleData["LocalAngRight"] = yAngL
-		self.VehicleData[ "pp_spin_1" ] = "vehicle_wheel_fl_spin"
-		self.VehicleData[ "pp_spin_2" ] = "vehicle_wheel_fr_spin"
-		self.VehicleData[ "pp_spin_3" ] = "vehicle_wheel_rl_spin"
-		self.VehicleData[ "pp_spin_4" ] = "vehicle_wheel_rr_spin"
-		
-		self.Turbo = CreateSound(self, "")
-		self.Blower = CreateSound(self, "")
-		self.BlowerWhine = CreateSound(self, "")
-		self.BlowOff = CreateSound(self, "")
-
-		local Health = math.floor(self.MaxHealth and self.MaxHealth or (1000 + self:GetPhysicsObject():GetMass() / 3))
-		self:SetMaxHealth( Health )
-		self:SetCurHealth( Health )
-		
-		self:SetFastSteerAngle(self.FastSteeringAngle / self.VehicleData["steerangle"])
-		self:SetNotSolid( false )
-		self:SetupVehicle()
-	end )
 end
 
 function ENT:SetupVehicle()
@@ -600,7 +507,6 @@ function ENT:SetupVehicle()
 	
 	self.EnableSuspension = 1
 	self:OnSpawn()
-	hook.Run( "simfphysOnSpawn", self )
 end
 
 function ENT:CreateWheel(index, name, attachmentpos, height, radius, swap_y , poseposition, suspensiontravel, constant, damping, rdamping)
@@ -659,6 +565,9 @@ function ENT:CreateWheel(index, name, attachmentpos, height, radius, swap_y , po
 		self.GhostWheels[index]:SetNotSolid( true )
 		self.GhostWheels[index].DoNotDuplicate = true
 		self.GhostWheels[index]:SetParent( self.name )
+		if(self.InvisWheels) then
+			self.GhostWheels[index]:SetNoDraw(true)
+		end
 		self:DeleteOnRemove( self.GhostWheels[index] )
 		simfphys.SetOwner( self.EntityOwner, self.GhostWheels[index] )
 		

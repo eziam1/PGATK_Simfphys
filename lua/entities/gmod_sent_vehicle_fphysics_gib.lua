@@ -30,24 +30,15 @@ end
 
 if SERVER then
 	util.AddNetworkString( "simfphys_explosion_fx" )
-	
+	ENT.RemoveTimer = CurTime() + 10
 	function ENT:Initialize()
 		self:PhysicsInit( SOLID_VPHYSICS )
 		self:SetMoveType( MOVETYPE_VPHYSICS )
 		self:SetSolid( SOLID_VPHYSICS )
-		
-		if not IsValid( self:GetPhysicsObject() ) then
-			self.RemoveTimer = 0
-			
-			self:Remove()
-			return
-		end
-		
 		self:GetPhysicsObject():EnableMotion(true)
 		self:GetPhysicsObject():Wake()
 		self:SetCollisionGroup( COLLISION_GROUP_DEBRIS ) 
 		self:SetRenderMode( RENDERMODE_TRANSALPHA )
-		
 		
 		timer.Simple( 0.05, function()
 			if not IsValid( self ) then return end
@@ -57,7 +48,7 @@ if SERVER then
 				net.Broadcast()
 				
 				util.ScreenShake( self:GetPos(), 50, 50, 1.5, 700 )
-				util.BlastDamage( self, Entity(0), self:GetPos(), 300,200 )
+				//util.BlastDamage( self, Entity(0), self:GetPos(), 300,200 )
 				
 				local Light = ents.Create( "light_dynamic" )
 				Light:SetPos( self:GetPos() + Vector( 0, 0, 10 ) )
@@ -117,17 +108,15 @@ if SERVER then
 			end
 			
 		end)
-
-		self.RemoveDis = GetConVar("sv_simfphys_gib_lifetime"):GetFloat()
-
-		self.RemoveTimer = CurTime() + self.RemoveDis
 	end
 
 	function ENT:Think()	
-		if self.RemoveTimer < CurTime() then
-			if self.RemoveDis > 0 then
-				self:Remove()
-			end
+		if(!timer.Exists("removegib"..self:EntIndex())) then
+			timer.Create("removegib"..self:EntIndex(),3,1,function()
+				if(IsValid(self)) then
+					self:Remove()
+				end
+			end)
 		end
 		
 		self:NextThink( CurTime() + 0.2 )

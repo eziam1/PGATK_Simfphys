@@ -4,58 +4,93 @@ include("shared.lua")
 include("spawn.lua")
 include("simfunc.lua")
 include("numpads.lua")
-include("damage.lua")
-
-local function EntityLookup(CreatedEntities)
-	return function(id, default)
-		if id == nil then return default end
-		if id == 0 then return game.GetWorld() end
-		local ent = CreatedEntities[id] or (isnumber(id) and ents.GetByIndex(id))
-		if IsValid(ent) then return ent else return default end
-	end
-end
-
-function ENT:ApplyDupeInfo(ply, ent, info, GetEntByID)
-	if istable( WireLib ) then
-		WireLib.ApplyDupeInfo(ply, ent, info, GetEntByID)
-	end
-end
-
-function ENT:PreEntityCopy()
-	if istable( WireLib ) then
-		duplicator.StoreEntityModifier( self, "WireDupeInfo", WireLib.BuildDupeInfo(self) )
-	end
-end
-
-function ENT:PostEntityPaste(Player,Ent,CreatedEntities)
-	if istable( WireLib ) then
-		if Ent.EntityMods and Ent.EntityMods.WireDupeInfo then
-			WireLib.ApplyDupeInfo(Player, Ent, Ent.EntityMods.WireDupeInfo, EntityLookup(CreatedEntities))
-		end
-	end
-end
+include("horn_siren_lights.lua")
 
 function ENT:OnSpawn()
 end
 
 function ENT:OnTick()
+if(self:WaterLevel() == 3) then
+	if(self:GetCurHealth() <= 30) then
+		DestroyVehicle(self, false)
+		//self:GetDriver():Kill()
+	else
+		self:TakeDamage(6, Entity(0), Entity(0) )
+	end
+end
+if(self.gearwhine && self.canupgrade == true) then
+local vmax = ((((self:GetLimitRPM()) * self.Gears[ table.Count( self.Gears ) ] * (self:GetDifferentialGear())) * 3.14 * self.RearWheelRadius * 2) / 52)
+self.gearwhine:ChangeVolume( math.Clamp((self.WheelRPM^1.4)/vmax,0,0.85)*math.Clamp(self:GetThrottle(),0.33,1)*((self.ThrottleDelay) > CurTime() && 0.2 or 1) )
+self.gearwhine:ChangePitch( math.Clamp(0.4+((self.WheelRPM^1.16)/vmax)*((self.ThrottleDelay) > CurTime() && 0.75 or 1),0.4,2.55)*100,0.1 )
+end
+local inworldcheckleft = {}
+inworldcheckleft.start = self:GetPos()+self:GetUp()*(self:OBBMins().z+8)
+inworldcheckleft.endpos = self:GetPos()+self:GetUp()*8+self:GetRight()*-(self:OBBMaxs().y+8)
+inworldcheckleft.filter = function( ent ) 
+	if ( ent:IsPlayer() ) then 
+		return false 
+	elseif ( ent == self ) then 
+		return false 
+	elseif ( ent:GetClass() == "gmod_sent_vehicle_fphysics_wheel" ) then 
+		return false 
+	else
+		return true
+	end
+end
+local inworldcheckright = {}
+inworldcheckright.start = self:GetPos()+self:GetUp()*(self:OBBMins().z+8)
+inworldcheckright.endpos = self:GetPos()+self:GetUp()*8+self:GetRight()*(self:OBBMaxs().y+8)
+inworldcheckright.filter = function( ent ) 
+	if ( ent:IsPlayer() ) then 
+		return false 
+	elseif ( ent == self ) then 
+		return false 
+	elseif ( ent:GetClass() == "gmod_sent_vehicle_fphysics_wheel" ) then 
+		return false 
+	else
+		return true
+	end
+end
+local inworldcheckup = {}
+inworldcheckup.start = self:GetPos()+self:GetUp()*((self:OBBMins().z+self:OBBMaxs().z)/2)
+inworldcheckup.endpos = self:GetPos()+self:GetUp()*(self:OBBMaxs().z+8)
+inworldcheckup.filter = function( ent ) 
+	if ( ent:IsPlayer() ) then 
+		return false 
+	elseif ( ent == self ) then 
+		return false 
+	elseif ( ent:GetClass() == "gmod_sent_vehicle_fphysics_wheel" ) then 
+		return false 
+	else
+		return true
+	end
+end
+self.traceleft = util.TraceLine( inworldcheckleft )
+self.traceright = util.TraceLine( inworldcheckright )
+self.traceup = util.TraceLine( inworldcheckup )
+if((self.traceleft.Hit or self.traceright.Hit or self.traceup.Hit) && self:GetVelocity():Length() > 150) then
+	if(!self.traceup.Hit) then
+		self:GetPhysicsObject():SetVelocity(Vector(self:GetPhysicsObject():GetVelocity().x/1.015,self:GetPhysicsObject():GetVelocity().y/1.015,self:GetPhysicsObject():GetVelocity().z))
+	end
+end
 end
 
 function ENT:OnDelete()
+if(self.MadVehicle) then
+	self:EmitSound("common/null.wav", 85,100,0.4,CHAN_STREAM)
+end
 end
 
 function ENT:OnDestroyed()
+if(self.MadVehicle) then
+	self:EmitSound("common/null.wav", 85,100,0.4,CHAN_STREAM)
 end
-
-function ENT:OnRepaired()
 end
 
 function ENT:Think()
 	local Time = CurTime()
 	
 	self:OnTick()
-	
-	hook.Run( "simfphysOnTick", self, Time )
 	
 	self.NextTick = self.NextTick or 0
 	if self.NextTick < Time then
@@ -67,10 +102,6 @@ function ENT:Think()
 			
 			local OldDriver = self:GetDriver()
 			if OldDriver ~= Driver then
-				if self:GetIsVehicleLocked() then
-					self:UnLock()
-				end
-
 				self:SetDriver( Driver )
 				
 				local HadDriver = IsValid( OldDriver )
@@ -78,12 +109,7 @@ function ENT:Think()
 				
 				if HasDriver then
 					self:SetActive( true )
-					self:SetupControls( Driver )
-					
-					if Driver:GetInfoNum( "cl_simfphys_autostart", 1 ) > 0 then 
-						self:StartEngine()
-					end
-					
+					self:StartEngine()
 				else
 					if self.ems then
 						self.ems:Stop()
@@ -92,7 +118,7 @@ function ENT:Think()
 					if self.horn then
 						self.horn:Stop()
 					end
-					
+
 					if self.PressedKeys then
 						for k,v in pairs( self.PressedKeys ) do
 							if isbool( v ) then
@@ -106,41 +132,22 @@ function ENT:Think()
 							numpad.Remove( self.keys[i] )
 						end
 					end
-					
-					if HadDriver then
-						if OldDriver:GetInfoNum( "cl_simfphys_autostart", 1 ) > 0 then 
-							self:StopEngine()
-							self:SetActive( false )
-						else
-							self:ResetJoystick()
-							
-							if not self:EngineActive() then
-								self:SetActive( false )
-							end
-						end
-					else
-						self:SetActive( false )
-						self:StopEngine()
-					end
+					self:SetActive( false )
+					self:StopEngine()
 				end
 			end
 		end
 		
 		if self:IsInitialized() then
-			self:SetColors()
 			self:SimulateVehicle( Time )
 			self:ControlLighting( Time )
 			self:ControlHorn()
 			
-			if istable( WireLib ) then
-				self:UpdateWireOutputs()
-			end
-			
-			self.NextWaterCheck = self.NextWaterCheck or 0
-			if self.NextWaterCheck < Time then
-				self.NextWaterCheck = Time + 0.2
-				self:WaterPhysics()
-			end
+			//self.NextWaterCheck = self.NextWaterCheck or 0
+			//if self.NextWaterCheck < Time then
+				//self.NextWaterCheck = Time + 0.2
+				//self:WaterPhysics()
+			//end
 			
 			if self:GetActive() then
 				self:SetPhysics( ((math.abs(self.ForwardSpeed) < 50) and (self.Brake > 0 or self.HandBrake > 0)) )
@@ -169,16 +176,6 @@ function ENT:ControlHorn()
 			self.horn:ChangeVolume( self.HornVolume ^ 2 )
 		end
 	end
-end
-
-function ENT:createWireIO()
-	self.Inputs = WireLib.CreateInputs( self,{"Eject Driver","Eject Passengers","Lock","Engine Start","Engine Stop","Engine Toggle","Steer","Throttle","Gear Up","Gear Down","Set Gear","Clutch","Handbrake","Brake/Reverse"} )
-	--self.Inputs = WireLib.CreateSpecialInputs(self, { "blah" }, { "NORMAL" })
-	
-	self.Outputs = WireLib.CreateSpecialOutputs( self, 
-		{ "Active","Health","RPM","Torque","DriverSeat","PassengerSeats","Driver","Gear","Ratio","Lights Enabled","Highbeams Enabled","Foglights Enabled","Sirens Enabled","Turn Signals Enabled","Remaining Fuel" },
-		{ "NORMAL","NORMAL","NORMAL","NORMAL","ENTITY","ARRAY","ENTITY","NORMAL","NORMAL","NORMAL","NORMAL","NORMAL","NORMAL","NORMAL","NORMAL" }
-	)
 end
 
 function ENT:TriggerInput( name, value )
@@ -292,25 +289,6 @@ function ENT:ForceGear( desGear )
 	self:SetGear( self.CurrentGear )
 end
 
-function ENT:UpdateWireOutputs()
-	WireLib.TriggerOutput(self, "Active", self:EngineActive() and 1 or 0 )
-	WireLib.TriggerOutput(self, "Health", self:GetCurHealth() )
-	
-	WireLib.TriggerOutput(self, "Driver", self:GetDriver() )
-	WireLib.TriggerOutput(self, "Torque", self.Torque )
-	WireLib.TriggerOutput(self, "RPM", self:GetEngineRPM() )
-	
-	WireLib.TriggerOutput(self, "Gear", self:GetGear() )
-	WireLib.TriggerOutput(self, "Ratio",self:GetGear() == 2 and 0 or (self.GearRatio or 0) )
-	
-	WireLib.TriggerOutput(self, "Lights Enabled", self:GetLightsEnabled() and 1 or 0 )
-	WireLib.TriggerOutput(self, "Highbeams Enabled", self:GetLampsEnabled() and 1 or 0 )
-	WireLib.TriggerOutput(self, "Foglights Enabled", self:GetFogLightsEnabled() and 1 or 0 )
-	WireLib.TriggerOutput(self, "Sirens Enabled", self:GetEMSEnabled() and 1 or 0 )
-	WireLib.TriggerOutput(self, "Turn Signals Enabled", self:GetTSEnabled())
-	WireLib.TriggerOutput(self, "Remaining Fuel", self:GetFuel())
-end
-
 function ENT:OnActiveChanged( name, old, new)
 	if new == old then return end
 	
@@ -333,10 +311,15 @@ function ENT:OnActiveChanged( name, old, new)
 			self.Turbo = CreateSound(self, self.snd_spool or "simulated_vehicles/turbo_spin.wav")
 			self.Turbo:PlayEx(0,0)
 		end
+		if self.BetterShifting or self.WhineSound then
+			self.gearwhine = CreateSound(self, self.WhineSound or "eziam/raceattack/tranny.wav")
+			self.gearwhine:SetSoundLevel( 75 )
+			self.gearwhine:PlayEx(0,0)
+		end
 		
 		if SuperCharged then
 			self.Blower = CreateSound(self, self.snd_bloweroff or "simulated_vehicles/blower_spin.wav")
-			self.BlowerWhine = CreateSound(self, self.snd_bloweron or "simulated_vehicles/blower_gearwhine.wav")
+			self.BlowerWhine = CreateSound(self, self.snd_bloweron or "pga/blower_whine.wav")
 			
 			self.Blower:PlayEx(0,0)
 			self.BlowerWhine:PlayEx(0,0)
@@ -346,6 +329,9 @@ function ENT:OnActiveChanged( name, old, new)
 		
 		if TurboCharged then
 			self.Turbo:Stop()
+		end
+		if self.gearwhine then
+			self.gearwhine:Stop()
 		end
 
 		if SuperCharged then
@@ -377,7 +363,7 @@ function ENT:OnThrottleChanged( name, old, new)
 		if Health < MaxHealth * 0.6 then
 			if Active then
 				if math.Round(math.random(0,4),0) == 1 then
-					self:DamagedStall()
+					//self:DamagedStall()
 				end
 			end
 		end
@@ -388,9 +374,11 @@ function ENT:OnThrottleChanged( name, old, new)
 			if (self.SmoothTurbo > 350) then
 				local Volume = math.Clamp( ((self.SmoothTurbo - 300) / 150) ,0, 1) * 0.5
 				self.SmoothTurbo = 0
-				self.BlowOff:Stop()
-				self.BlowOff = CreateSound(self, self.snd_blowoff or "simulated_vehicles/turbo_blowoff.ogg")
-				self.BlowOff:PlayEx(Volume,100)
+				/*self.BlowOff:Stop()
+				self.BlowOff = CreateSound(self, self.snd_blowoff or "simulated_vehicles/turbo_blowoff.wav")*/
+				self:EmitSound("pga/blowoff"..math.random(1,5)..".wav", 85, math.random(90,115),0.5,CHAN_STATIC)
+				self:EmitSound("eziam/raceattack/blowoff"..math.random(1,2)..".wav", 80, math.random(90,115),0.6,CHAN_STATIC)
+				self:EmitSound("pga/blowofflayer.wav", 80, math.random(90,115),0.4,CHAN_STATIC)
 			end
 		end
 	end
@@ -425,26 +413,6 @@ function ENT:WaterPhysics()
 	phys:ApplyForceCenter( -self:GetVelocity() * 0.5 * phys:GetMass() )
 end
 
-function ENT:SetColors()
-	if self.ColorableProps then
-		
-		local Color = self:GetColor()
-		local dot = Color.r * Color.g * Color.b * Color.a
-		
-		if dot ~= self.OldColor then
-			
-			for i, prop in pairs( self.ColorableProps ) do
-				if IsValid(prop) then
-					prop:SetColor( Color )
-					prop:SetRenderMode( self:GetRenderMode() )
-				end
-			end
-			
-			self.OldColor = dot
-		end
-	end
-end
-
 function ENT:ControlLighting( curtime )
 	if (self.NextLightCheck or 0) < curtime then
 		
@@ -456,14 +424,6 @@ function ENT:ControlLighting( curtime )
 			end
 		end
 	end
-end
-
-function ENT:SetTSInternal(mode)
-	self.TSMode = mode
-end
-
-function ENT:GetTSEnabled()
-	if self.TSMode != nil then return self.TSMode else return 0 end
 end
 
 function ENT:GetEngineData()
@@ -527,51 +487,55 @@ function ENT:SimulateVehicle( curtime )
 	
 	if Active then
 		local ply = self:GetDriver()
-		local IsValidDriver = IsValid( ply )
+		local IsValidDriver = IsValid( ply ) or self.AI
 		
 		local GearUp = self.PressedKeys["M1"] and 1 or self.PressedKeys["joystick_gearup"]
 		local GearDown = self.PressedKeys["M2"] and 1 or self.PressedKeys["joystick_geardown"]
 		
-		local W = self.PressedKeys["W"] and 1 or 0
-		local A = self.PressedKeys["A"] and 1 or self.PressedKeys["joystick_steer_left"]
-		local S = self.PressedKeys["S"] and 1 or 0
-		local D = self.PressedKeys["D"] and 1 or self.PressedKeys["joystick_steer_right"]
+		local W = 0
+		local A = 0
+		local S = 0
+		local D = 0
 		
-		if IsValidDriver then self:PlayerSteerVehicle( ply, A, D ) end
-		
-		local aW = self.PressedKeys["aW"] and 1 or self.PressedKeys["joystick_air_w"]
-		local aA = self.PressedKeys["aA"] and 1 or self.PressedKeys["joystick_air_a"]
-		local aS = self.PressedKeys["aS"] and 1 or self.PressedKeys["joystick_air_s"]
-		local aD = self.PressedKeys["aD"] and 1 or self.PressedKeys["joystick_air_d"]
-		
-		local cruise = self:GetIsCruiseModeOn()
-		
-		local k_sanic = IsValidDriver and ply:GetInfoNum( "cl_simfphys_sanic", 0 ) or 1
-		local sanicmode = isnumber( k_sanic ) and k_sanic or 0
-		local k_Shift = self.PressedKeys["Shift"]
-		local Shift = (sanicmode == 1) and (k_Shift and 0 or 1) or (k_Shift and 1 or 0)
-		
-		local sportsmode = IsValidDriver and ply:GetInfoNum( "cl_simfphys_sport", 0 ) or 1
-		local k_auto = IsValidDriver and ply:GetInfoNum( "cl_simfphys_auto", 0 ) or 1
-		local transmode = (k_auto == 1)
-		
-		local Alt = self.PressedKeys["Alt"] and 1 or 0
-		local Space = self.PressedKeys["Space"] and 1 or self.PressedKeys["joystick_handbrake"]
-		
-		if cruise then
-			if (self.PressedKeys["joystick_gearup"] + self.PressedKeys["joystick_geardown"] + self.PressedKeys["joystick_handbrake"] + self.PressedKeys["joystick_throttle"] + self.PressedKeys["joystick_clutch"] + self.PressedKeys["joystick_brake"]) > 0 then
-				self:SetIsCruiseModeOn( false )
-			end
-			
-			if k_Shift then
-				self.cc_speed = math.Round(self:GetVelocity():Length(),0) + 70
-			end
-			if Alt == 1 then
-				self.cc_speed = math.Round(self:GetVelocity():Length(),0) - 25
+		local aW = 0
+		local aA = 0
+		local aS = 0
+		local aD = 0
+		local Shift = 0
+		local Space = 0
+		if(IsValidDriver) then
+			if(ply:IsPlayer()) then
+				W = ply:KeyDown( IN_FORWARD ) and 1 or 0
+				A = ply:KeyDown( IN_MOVELEFT ) and 1 or 0
+				S = ply:KeyDown( IN_BACK ) and 1 or 0
+				D = ply:KeyDown( IN_MOVERIGHT ) and 1 or 0
+				aW = W
+				aA = A
+				aS = S
+				aD = D
+				Shift = ply:KeyDown( IN_WALK ) and 0 or 1
+			else
+				W = self.PressedKeys["W"] and 1 or 0
+				A = self.PressedKeys["A"] and 1 or self.PressedKeys["joystick_steer_left"]
+				S = self.PressedKeys["S"] and 1 or 0
+				D = self.PressedKeys["D"] and 1 or self.PressedKeys["joystick_steer_right"]
+				
+				aW = self.PressedKeys["aW"] and 1 or 0
+				aA = self.PressedKeys["aA"] and 1 or 0
+				aS = self.PressedKeys["aS"] and 1 or 0
+				aD = self.PressedKeys["aD"] and 1 or 0
+				Shift = (self.PressedKeys["Shift"] and 0 or 1)
+				Space = self.PressedKeys["Space"] and 1 or 0
 			end
 		end
 		
-		self:SimulateTransmission(W,S,Shift,Alt,Space,GearUp,GearDown,transmode,IdleRPM,Powerbandstart,Powerbandend,sportsmode,cruise,curtime)
+		if IsValidDriver then self:PlayerSteerVehicle( ply, A, D ) end
+		
+		local transmode = 1
+		
+		local Alt = 0
+		
+		self:SimulateTransmission(W,S,Shift,Alt,Space,GearUp,GearDown,transmode,IdleRPM,Powerbandstart,Powerbandend,1,false,curtime)
 		
 		self:SimulateEngine( IdleRPM, LimitRPM, Powerbandstart, Powerbandend, curtime )
 		self:SimulateWheels( math.max(Space,Alt), LimitRPM )
@@ -588,127 +552,113 @@ function ENT:SimulateVehicle( curtime )
 	end
 end
 
-function ENT:SetupControls( ply )
-	self:ResetJoystick()
+/*function ENT:SimulateVehicle( curtime )
+	local Active = self:GetActive()
 	
-	if self.keys then
-		for i = 1, table.Count( self.keys ) do
-			numpad.Remove( self.keys[i] )
+	local EngineData = self:GetEngineData()
+	
+	local LimitRPM = EngineData.LimitRPM
+	local Powerbandend = EngineData.Powerbandend
+	local Powerbandstart = EngineData.Powerbandstart
+	local IdleRPM = EngineData.IdleRPM
+	
+	self.Forward =  self:LocalToWorldAngles( self.VehicleData.LocalAngForward ):Forward() 
+	self.Right = self:LocalToWorldAngles( self.VehicleData.LocalAngRight ):Forward() 
+	self.Up = self:GetUp()
+	
+	self.Vel = self:GetVelocity()
+	self.VelNorm = self.Vel:GetNormalized()
+	
+	self.MoveDir = math.acos( math.Clamp( self.Forward:Dot(self.VelNorm) ,-1,1) ) * (180 / math.pi)
+	self.ForwardSpeed = math.cos(self.MoveDir * (math.pi / 180)) * self.Vel:Length()
+	
+	if self.poseon then
+		self.cpose = self.cpose or self.LightsPP.min
+		local anglestep = math.abs(math.max(self.LightsPP.max or self.LightsPP.min)) / 3
+		self.cpose = self.cpose + math.Clamp(self.poseon - self.cpose,-anglestep,anglestep)
+		self:SetPoseParameter(self.LightsPP.name, self.cpose)
+	end
+	
+	self:SetPoseParameter("vehicle_guage", (math.abs(self.ForwardSpeed) * 0.0568182 * 0.75) / (self.SpeedoMax or 120))
+	
+	if self.RPMGaugePP then
+		local flywheelrpm = self:GetFlyWheelRPM()
+		local rpm
+		if self:GetRevlimiter() then
+			local throttle = self:GetThrottle()
+			local maxrpm = self:GetLimitRPM()
+			local revlimiter = (maxrpm > 2500) and (throttle > 0)
+			rpm = math.Round(((flywheelrpm >= maxrpm - 200) and revlimiter) and math.Round(flywheelrpm - 200 + math.sin(curtime * 50) * 600,0) or flywheelrpm,0)
+		else
+			rpm = flywheelrpm
+		end
+	
+		self:SetPoseParameter(self.RPMGaugePP,  rpm / self.RPMGaugeMax)
+	end
+	
+	
+	if Active then
+		local ply = self:GetDriver()
+
+		local GearUp = 0
+		local GearDown = 0
+
+		local W = 0
+		local A = 0
+		local S = 0
+		local D = 0
+
+		local aW = 0
+		local aA = 0
+		local aS = 0
+		local aD = 0
+
+		local Shift = 0
+
+		local sportsmode = 1
+		local transmode = true
+
+		local Alt = 0
+		local Space = 0
+
+		if IsValid( ply ) then 
+			GearUp = ply:KeyDown( IN_ATTACK ) and 1 or 0
+			GearDown = ply:KeyDown( IN_ATTACK2 ) and 1 or 0
+
+			W = ply:KeyDown( IN_FORWARD ) and 1 or 0
+			A = ply:KeyDown( IN_MOVELEFT ) and 1 or 0
+			S = ply:KeyDown( IN_BACK ) and 1 or 0
+			D = ply:KeyDown( IN_MOVERIGHT ) and 1 or 0
+
+			aW = W
+			aA = A
+			aS = S
+			aD = D
+
+			Shift = ply:KeyDown( IN_WALK ) and 0 or 1
+
+			--Alt = ply:KeyDown( IN_SPEED ) and 
+			--Space = ply:KeyDown( IN_JUMP ) and 1 or 0
+
+			self:PlayerSteerVehicle( ply, A, D )
+		end
+
+		self:SimulateTransmission(W,S,Shift,Alt,Space,GearUp,GearDown,transmode,IdleRPM,Powerbandstart,Powerbandend,sportsmode,false,curtime)
+		
+		self:SimulateEngine( IdleRPM, LimitRPM, Powerbandstart, Powerbandend, curtime )
+		self:SimulateWheels( math.max(Space,Alt), LimitRPM )
+		self:SimulateAirControls( aW, aS, aA, aD )
+		
+		if self.WheelOnGroundDelay < curtime then
+			self:WheelOnGround()
+			self.WheelOnGroundDelay = curtime + 0.15
 		end
 	end
-
-	if IsValid(ply) then
-		self.cl_SteerSettings = {
-			Overwrite = (ply:GetInfoNum( "cl_simfphys_overwrite", 0 ) >= 1),
-			TurnSpeed = ply:GetInfoNum( "cl_simfphys_steerspeed", 8 ),
-			fadespeed = ply:GetInfoNum( "cl_simfphys_fadespeed", 535 ),
-			fastspeedangle = ply:GetInfoNum( "cl_simfphys_steerangfast", 10 ),
-			smoothsteer = (ply:GetInfoNum( "cl_simfphys_smoothsteer", 0 ) >= 1),
-		}
-		
-		local W = ply:GetInfoNum( "cl_simfphys_keyforward", 0 )
-		local A = ply:GetInfoNum( "cl_simfphys_keyleft", 0 )
-		local S = ply:GetInfoNum( "cl_simfphys_keyreverse", 0 )
-		local D = ply:GetInfoNum( "cl_simfphys_keyright", 0 )
-		
-		local aW = ply:GetInfoNum( "cl_simfphys_key_air_forward", 0 )
-		local aA = ply:GetInfoNum( "cl_simfphys_key_air_left", 0 )
-		local aS = ply:GetInfoNum( "cl_simfphys_key_air_reverse", 0 )
-		local aD = ply:GetInfoNum( "cl_simfphys_key_air_right", 0 )
-		
-		local GearUp = ply:GetInfoNum( "cl_simfphys_keygearup", 0 )
-		local GearDown = ply:GetInfoNum( "cl_simfphys_keygeardown", 0 )
-		
-		local R = ply:GetInfoNum( "cl_simfphys_cruisecontrol", 0 )
-		
-		local F = ply:GetInfoNum( "cl_simfphys_lights", 0 )
-		
-		local V = ply:GetInfoNum( "cl_simfphys_foglights", 0 )
-		
-		local H = ply:GetInfoNum( "cl_simfphys_keyhorn", 0 )
-		
-		local I = ply:GetInfoNum( "cl_simfphys_keyengine", 0 )
-		
-		local Shift = ply:GetInfoNum( "cl_simfphys_keywot", 0 )
-		
-		local Alt = ply:GetInfoNum( "cl_simfphys_keyclutch", 0 )
-		local Space = ply:GetInfoNum( "cl_simfphys_keyhandbrake", 0 )
-		
-		local lock = ply:GetInfoNum( "cl_simfphys_key_lock", 0 )
-		
-		local w_dn = numpad.OnDown( ply, W, "k_forward",self, true )
-		local w_up = numpad.OnUp( ply, W, "k_forward",self, false )
-		local s_dn = numpad.OnDown( ply, S, "k_reverse",self, true )
-		local s_up = numpad.OnUp( ply, S, "k_reverse",self, false )
-		local a_dn = numpad.OnDown( ply, A, "k_left",self, true )
-		local a_up = numpad.OnUp( ply, A, "k_left",self, false )
-		local d_dn = numpad.OnDown( ply, D, "k_right",self, true )
-		local d_up = numpad.OnUp( ply, D, "k_right",self, false )
-		
-		local aw_dn = numpad.OnDown( ply, aW, "k_a_forward",self, true )
-		local aw_up = numpad.OnUp( ply, aW, "k_a_forward",self, false )
-		local as_dn = numpad.OnDown( ply, aS, "k_a_reverse",self, true )
-		local as_up = numpad.OnUp( ply, aS, "k_a_reverse",self, false )
-		local aa_dn = numpad.OnDown( ply, aA, "k_a_left",self, true )
-		local aa_up = numpad.OnUp( ply, aA, "k_a_left",self, false )
-		local ad_dn = numpad.OnDown( ply, aD, "k_a_right",self, true )
-		local ad_up = numpad.OnUp( ply, aD, "k_a_right",self, false )
-		
-		local gup_dn = numpad.OnDown( ply, GearUp, "k_gup",self, true )
-		local gup_up = numpad.OnUp( ply, GearUp, "k_gup",self, false )
-		
-		local gdn_dn = numpad.OnDown( ply, GearDown, "k_gdn",self, true )
-		local gdn_up = numpad.OnUp( ply, GearDown, "k_gdn",self, false )
-		
-		local shift_dn = numpad.OnDown( ply, Shift, "k_wot",self, true )
-		local shift_up = numpad.OnUp( ply, Shift, "k_wot",self, false )
-		
-		local alt_dn = numpad.OnDown( ply, Alt, "k_clutch",self, true )
-		local alt_up = numpad.OnUp( ply, Alt, "k_clutch",self, false )
-		
-		local space_dn = numpad.OnDown( ply, Space, "k_hbrk",self, true )
-		local space_up = numpad.OnUp( ply, Space, "k_hbrk",self, false )
-		
-		local k_cruise = numpad.OnDown( ply, R, "k_ccon",self, true )
-		
-		local k_lights_dn = numpad.OnDown( ply, F, "k_lgts",self, true )
-		local k_lights_up = numpad.OnUp( ply, F, "k_lgts",self, false )
-		
-		local k_flights_dn = numpad.OnDown( ply, V, "k_flgts",self, true )
-		local k_flights_up = numpad.OnUp( ply, V, "k_flgts",self, false )
-		
-		local k_horn_dn = numpad.OnDown( ply, H, "k_hrn",self, true )
-		local k_horn_up = numpad.OnUp( ply, H, "k_hrn",self, false )
-		
-		local k_engine_dn = numpad.OnDown( ply, I, "k_eng",self, true )
-		local k_engine_up = numpad.OnUp( ply, I, "k_eng",self, false )
-		
-		local k_lock_dn = numpad.OnDown( ply, lock, "k_lock",self, true )
-		local k_lock_up = numpad.OnUp( ply, lock, "k_lock",self, false )
-		
-		self.keys = {
-			w_dn,w_up,
-			s_dn,s_up,
-			a_dn,a_up,
-			d_dn,d_up,
-			aw_dn,aw_up,
-			as_dn,as_up,
-			aa_dn,aa_up,
-			ad_dn,ad_up,
-			gup_dn,gup_up,
-			gdn_dn,gdn_up,
-			shift_dn,shift_up,
-			alt_dn,alt_up,
-			space_dn,space_up,
-			k_cruise,
-			k_lights_dn,k_lights_up,
-			k_horn_dn,k_horn_up,
-			k_flights_dn,k_flights_up,
-			k_engine_dn,k_engine_up,
-			k_lock_dn,k_lock_up,
-		}
+	
+	if self.CustomWheels then
+		self:PhysicalSteer()
 	end
-end
+end*/
 
 function ENT:PlayAnimation( animation )
 	local anims = string.Implode( ",", self:GetSequenceList() )
@@ -800,38 +750,23 @@ end
 
 function ENT:StopEngine()
 	if self:EngineActive() then
-		
-		if hook.Run( "simfphysOnEngine", self, false, bIgnoreSettings ) then return end
-		
 		self:EmitSound( "vehicles/jetski/jetski_off.wav" )
 
 		self.EngineRPM = 0
 		self.EngineIsOn = 0
 		
 		self:SetFlyWheelRPM( 0 )
-		self:SetIsCruiseModeOn( false )
 	end
 end
 
 function ENT:CanStart()
-	local FuelSystemOK = true
-	
-	if simfphys.Fuel then
-		FuelSystemOK = self:GetFuel() > 0
-	end
-	
-	local canstart = self:GetCurHealth() > (self:GetMaxHealth() * 0.1) and FuelSystemOK
-	
-	return canstart
+	return self:GetCurHealth() > (self:GetMaxHealth() * 0.1)
 end
 
 function ENT:StartEngine( bIgnoreSettings )
 	if not self:CanStart() then return end
 	
 	if not self:EngineActive() then
-	
-		if hook.Run( "simfphysOnEngine", self, true, bIgnoreSettings ) then return end
-		
 		if not bIgnoreSettings then
 			self.CurrentGear = 2
 		end
@@ -852,12 +787,7 @@ function ENT:StallAndRestart( nTimer, bIgnoreSettings )
 	nTimer = nTimer or 1
 	
 	self:StopEngine()
-	
-	local ply = self:GetDriver()
-	if IsValid(ply) and not bIgnoreSettings then
-		if ply:GetInfoNum( "cl_simfphys_autostart", 1 ) <= 0 then return end
-	end
-	
+
 	timer.Simple( nTimer, function()
 		if not IsValid(self) then return end
 		self:StartEngine( bIgnoreSettings )
@@ -866,29 +796,17 @@ end
 
 function ENT:PlayerSteerVehicle( ply, left, right )
 	if IsValid( ply ) then
-		local CounterSteeringEnabled = (ply:GetInfoNum( "cl_simfphys_ctenable", 0 ) or 1) == 1
-		local CounterSteeringMul =  math.Clamp(ply:GetInfoNum( "cl_simfphys_ctmul", 0 ) or 0.7,0.1,2)
-		local MaxHelpAngle = math.Clamp(ply:GetInfoNum( "cl_simfphys_ctang", 0 ) or 15,1,90)
-		
 		local Ang = self.MoveDir
 		
-		local TurnSpeed
-		local fadespeed
-		local fastspeedangle
-		local extrasmooth = false
-		
-		if istable(self.cl_SteerSettings) and self.cl_SteerSettings.Overwrite then
-			TurnSpeed = self.cl_SteerSettings.TurnSpeed
-			fadespeed = self.cl_SteerSettings.fadespeed
-			fastspeedangle = self.cl_SteerSettings.fastspeedangle
-			extrasmooth =  self.cl_SteerSettings.smoothsteer
-		else
-			TurnSpeed = self:GetSteerSpeed()
-			fadespeed = self:GetFastSteerConeFadeSpeed()
-			fastspeedangle = self:GetFastSteerAngle() * self.VehicleData["steerangle"]
-		end
-		
+		local TurnSpeed = self:GetSteerSpeed()
+		local fadespeed = self:GetFastSteerConeFadeSpeed()
+		local fastspeedangle = self:GetFastSteerAngle() * self.VehicleData["steerangle"]
+
 		local SlowSteeringRate = (Ang > 20) and ((math.Clamp((self.ForwardSpeed - 150) / 25,0,1) == 1) and 60 or self.VehicleData["steerangle"]) or self.VehicleData["steerangle"]
+		if(self:GetVelocity():Length() < 500) then
+			SlowSteeringRate = SlowSteeringRate*(math.Clamp(2.5-(1.5*(self:GetVelocity():Length()/500)),1,100))
+		end
+
 		local FastSteeringAngle = math.Clamp(fastspeedangle,1,SlowSteeringRate)
 		
 		local FastSteeringRate = FastSteeringAngle + ((Ang > (FastSteeringAngle-1)) and 1 or 0) * math.min(Ang,90 - FastSteeringAngle)
@@ -896,15 +814,11 @@ function ENT:PlayerSteerVehicle( ply, left, right )
 		local Ratio = 1 - math.Clamp((math.abs(self.ForwardSpeed) - fadespeed) / 25,0,1)
 		
 		local SteerRate = FastSteeringRate + (SlowSteeringRate - FastSteeringRate) * Ratio
-		local Steer = ((left + right) > 0 and (right - left) or self:GetMouseSteer()) * SteerRate
+		local Steer = (right - left) * SteerRate
+
+		local Rate = TurnSpeed
 		
-		local LocalDrift = math.acos( math.Clamp( self.Right:Dot(self.VelNorm) ,-1,1) ) * (180 / math.pi) - 90
-		
-		local CounterSteer = CounterSteeringEnabled and (math.Clamp(LocalDrift * CounterSteeringMul * (((left + right) == 0) and 1 or 0),-MaxHelpAngle,MaxHelpAngle) * ((self.ForwardSpeed > 50) and 1 or 0)) or 0
-		
-		local Rate = extrasmooth and math.max( (math.abs(self.SmoothAng) / self.VehicleData["steerangle"]) ^ 1.5 * TurnSpeed, math.max(1 - self.ForwardSpeed / 2000,0.05) ) or TurnSpeed
-		
-		self.SmoothAng = self.SmoothAng + math.Clamp((Steer - CounterSteer) - self.SmoothAng,-Rate,Rate)
+		self.SmoothAng = self.SmoothAng + math.Clamp((Steer*(MirroredView and -1 or 1)) - self.SmoothAng,-Rate,Rate)
 		
 		self:SteerVehicle( self.SmoothAng )
 	end
@@ -913,18 +827,6 @@ end
 function ENT:SteerVehicle( steer )
 	self.VehicleData[ "Steer" ] = steer
 	self:SetVehicleSteer( steer / self.VehicleData["steerangle"] )
-end
-
-function ENT:Lock()
-	if hook.Run( "simfphysOnLock", self, true ) then return end
-	self:SetIsVehicleLocked( true )
-	self:EmitSound( "doors/latchlocked2.wav" )
-end
-
-function ENT:UnLock()
-	if hook.Run( "simfphysOnLock", self, false ) then return end
-	self:SetIsVehicleLocked( false )
-	self:EmitSound( "doors/latchunlocked1.wav" )
 end
 
 function ENT:ForceLightsOff()
@@ -942,86 +844,17 @@ function ENT:ForceLightsOff()
 	end
 end
 
-function ENT:EnteringSequence( ply )
-	local LinkedDoorAnims = istable(self.ModelInfo) and istable(self.ModelInfo.LinkDoorAnims)
-	if not istable(self.Enterpoints) and not LinkedDoorAnims then return end
-	
-	local sequence
-	local pos
-	local dist
-	
-	if LinkedDoorAnims then
-		for i,_ in pairs( self.ModelInfo.LinkDoorAnims ) do
-			local seq_ = self.ModelInfo.LinkDoorAnims[ i ].enter
-			
-			local a_pos = self:GetAttachment( self:LookupAttachment( i ) ).Pos
-			local a_dist = (ply:GetPos() - a_pos):Length()
-			
-			if not sequence then
-				sequence = seq_
-				pos = a_pos
-				dist = a_dist
-			else
-				if a_dist < dist then
-					sequence = seq_
-					pos = a_pos
-					dist = a_dist
-				end
-			end
-		end
-	else
-		for i = 1, table.Count( self.Enterpoints ) do
-			local a_ = self.Enterpoints[ i ]
-			
-			local a_pos = self:GetAttachment( self:LookupAttachment( a_ ) ).Pos
-			local a_dist = (ply:GetPos() - a_pos):Length()
-			
-			if i == 1 then
-				sequence = a_
-				pos = a_pos
-				dist = a_dist
-			else
-				if  (a_dist < dist) then
-					sequence = a_
-					pos = a_pos
-					dist = a_dist
-				end
-			end
-		end
-	end
-	
-	self:PlayAnimation( sequence )
-	self:ForceLightsOff()
-end
-
-function ENT:GetMouseSteer()
-	if IsValid(self.DriverSeat) then return (self.DriverSeat.ms_Steer or 0) end
-	
-	return 0
-end
-
 function ENT:Use( ply )
-	if not IsValid( ply ) then return end
-	
-	if hook.Run( "simfphysUse", self, ply ) then return end
-
-	if self:GetIsVehicleLocked() or self:HasPassengerEnemyTeam( ply ) then 
-		self:EmitSound( "doors/default_locked.wav" )
-
-		return
-	end
-
-	self:SetPassenger( ply )
+	//self:SetPassenger( ply )
 end
 
 function ENT:SetPassenger( ply )
 	if not IsValid( ply ) then return end
-	
-	if not IsValid(self:GetDriver()) and not ply:KeyDown(IN_WALK) then
+
+	if not IsValid(self:GetDriver()) then
 		ply:SetAllowWeaponsInVehicle( false ) 
 		if IsValid(self.DriverSeat) then
 			
-			self:EnteringSequence( ply )
 			ply:EnterVehicle( self.DriverSeat )
 			
 			timer.Simple( 0.01, function()
@@ -1071,35 +904,6 @@ function ENT:GetClosestSeat( ply )
 	return Seat
 end
 
-function ENT:HasPassengerEnemyTeam( ply )
-	if not GetConVar( "sv_simfphys_teampassenger" ):GetBool() then return false end
-	
-	if not IsValid( ply ) then return true end
-	
-	local myteam = ply:Team()
-	if IsValid( self:GetDriver() ) then
-		if self:GetDriver():Team() ~= myteam then
-			return true
-		end
-	end
-	
-	if self.PassengerSeats then
-		for i = 1, table.Count( self.pSeat ) do
-			if IsValid(self.pSeat[i]) then
-				
-				local Passenger = self.pSeat[i]:GetDriver()
-				if IsValid( Passenger ) then
-					if Passenger:Team() ~= myteam then
-						return true
-					end
-				end
-			end
-		end
-	end
-	
-	return false
-end
-
 function ENT:SetPhysics( enable )
 	if enable then
 		if not self.PhysicsEnabled then
@@ -1117,13 +921,6 @@ function ENT:SetPhysics( enable )
 				local Wheel = self.Wheels[i]
 				if IsValid(Wheel) then
 					Wheel:GetPhysicsObject():SetMaterial("friction_00")
-					if Wheel:GetPhysicsObject():GetMaterial() ~= "friction_00" then
-						print("(SIMFPHYS) ERROR! MISSING ''friction_00'' PHYSPROP-MATERIAL!!! THIS SHOULD NEVER HAPPEN!! CLEAN YOUR GMOD!! DON'T USE CONTENT OF GAMES YOU DON'T OWN!! DON'T EVEN BOTHER REPORTING THIS ISSUE, BECAUSE ONLY YOU CAN FIX THIS AS THIS IS AN ISSUE WITH YOUR GAME!!!!")
-						sound.Play( "common/bugreporter_failed.wav", self:GetPos() )
-						self:Remove()
-
-						break
-					end
 				end
 			end
 			self.PhysicsEnabled = false
@@ -1297,7 +1094,7 @@ function ENT:OnSuperCharged( name, old, new )
 		self.BlowerWhine:Stop()
 		
 		self.Blower = CreateSound(self, self.snd_bloweroff or "simulated_vehicles/blower_spin.wav")
-		self.BlowerWhine = CreateSound(self, self.snd_bloweron or "simulated_vehicles/blower_gearwhine.wav")
+		self.BlowerWhine = CreateSound(self, self.snd_bloweron or "pga/blower_whine.wav")
 	
 		self.Blower:PlayEx(0,0)
 		self.BlowerWhine:PlayEx(0,0)
@@ -1320,13 +1117,11 @@ function ENT:OnRemove()
 			end
 		end
 	end
-	if self.keys then
-		for i = 1, table.Count( self.keys ) do
-			numpad.Remove( self.keys[i] )
-		end
-	end
 	if self.Turbo then
 		self.Turbo:Stop()
+	end
+	if self.gearwhine then
+		self.gearwhine:Stop()
 	end
 	if self.Blower then
 		self.Blower:Stop()
@@ -1342,32 +1137,56 @@ function ENT:OnRemove()
 	end
 	
 	self:OnDelete()
-	hook.Run( "simfphysOnDelete", self )
 end
 
 function ENT:PlayPP( On )
 	self.poseon = On and self.LightsPP.max or self.LightsPP.min
 end
 
+function ENT:DamageLoop()
+	if not self:OnFire() then return end
+	
+	local CurHealth = self:GetCurHealth()
+	
+	if CurHealth <= 0 then return end
+	
+	if self:GetMaxHealth() > 30 then
+		if CurHealth > 30 then
+			local dmg = 1
+			if(IsValid(self:GetDriver()) && self:GetDriver():IsPlayer()) then
+				dmg = 1*(1-(self:GetDriver().V_Fire/100))
+			end
+			if(dmg > 0) then
+				self:TakeDamage(dmg, Entity(0), Entity(0) )
+			end
+		elseif CurHealth < 30 then
+			self:SetCurHealth( CurHealth + 1 )
+		end
+	end
+	
+	timer.Simple( 0.125, function()
+		if IsValid( self ) then
+			self:DamageLoop()
+		end
+	end)
+end
+
 function ENT:SetOnFire( bOn )
 	if bOn == self:OnFire() then return end
-	
-	if hook.Run( "simfphysOnFire", self, bOn ) then return end
 	self:SetNWBool( "OnFire", bOn )
 	
 	if bOn then
-		self:DamagedStall()
+		//self:DamagedStall()
+		self:DamageLoop()
 	end
 end
 
 function ENT:SetOnSmoke( bOn )
 	if bOn == self:OnSmoke() then return end
-	
-	if hook.Run( "simfphysOnSmoke", self, bOn ) then return end
 	self:SetNWBool( "OnSmoke", bOn )
 	
 	if bOn then
-		self:DamagedStall()
+		//self:DamagedStall()
 	end
 end
 
@@ -1377,25 +1196,5 @@ end
 
 function ENT:SetCurHealth( nHealth )
 	self:SetNWFloat( "Health", nHealth )
-end
-
-function ENT:SetMaxFuel( nFuel )
-	self:SetNWFloat( "MaxFuel", nFuel )
-end
-
-function ENT:SetFuel( nFuel )
-	self:SetNWFloat( "Fuel", math.Clamp( nFuel,0,self:GetMaxFuel() ) )
-end
-
-function ENT:SetFuelUse( nFuel )
-	self:SetNWFloat( "FuelUse", nFuel )
-end
-
-function ENT:SetFuelType( fueltype )
-	self:SetNWInt( "FuelType", fueltype )
-end
-
-function ENT:SetFuelPos( vPos )
-	self:SetFuelPortPosition( vPos )
 end
 

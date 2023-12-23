@@ -78,7 +78,7 @@ function EFFECT:Init( data )
 			if particle2 then
 				particle2:SetGravity( Vector(0,0,12) + Ran * 0.2 ) 
 				particle2:SetVelocity( Dir * 30 * (3 - Mul) + Vector(0,0,15) + Ran * Mul  )
-				particle2:SetDieTime( math.Rand( 2, 4 ) * Mul )
+				particle2:SetDieTime( 0.8 * Mul )
 				particle2:SetStartAlpha( 100 * Mul )
 				particle2:SetStartSize( WheelSize * 0.7 * Mul )
 				particle2:SetEndSize( math.Rand( 80, 160 ) * Mul ^ 2 )

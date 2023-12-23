@@ -4,10 +4,7 @@ numpad.Register( "k_forward", function( pl, ent, keydown )
 	if ent.PressedKeys then
 		ent.PressedKeys["W"] = keydown
 	end
-	
-	if keydown and ent:GetIsCruiseModeOn() then
-		ent:SetIsCruiseModeOn( false )
-	end
+
 end )
 
 numpad.Register( "k_reverse", function( pl, ent, keydown ) 
@@ -17,9 +14,6 @@ numpad.Register( "k_reverse", function( pl, ent, keydown )
 		ent.PressedKeys["S"] = keydown
 	end
 	
-	if keydown and ent:GetIsCruiseModeOn() then
-		ent:SetIsCruiseModeOn( false )
-	end
 end )
 
 numpad.Register( "k_left", function( pl, ent, keydown ) 
@@ -78,9 +72,6 @@ numpad.Register( "k_gup", function( pl, ent, keydown )
 		ent.PressedKeys["M1"] = keydown
 	end
 	
-	if keydown and ent:GetIsCruiseModeOn() then
-		ent:SetIsCruiseModeOn( false )
-	end
 end )
 
 numpad.Register( "k_gdn", function( pl, ent, keydown )
@@ -91,9 +82,6 @@ numpad.Register( "k_gdn", function( pl, ent, keydown )
 		ent.PressedKeys["M2"] = keydown
 	end
 	
-	if keydown and ent:GetIsCruiseModeOn() then
-		ent:SetIsCruiseModeOn( false )
-	end
 end )
 
 numpad.Register( "k_wot", function( pl, ent, keydown )
@@ -112,7 +100,7 @@ numpad.Register( "k_clutch", function( pl, ent, keydown )
 	end
 end )
 numpad.Register( "k_hbrk", function( pl, ent, keydown )
-	if not IsValid(pl) or not IsValid(ent) then return false end
+	/*if not IsValid(pl) or not IsValid(ent) then return false end
 	
 	if ent.PressedKeys then
 		ent.PressedKeys["Space"] = keydown
@@ -120,26 +108,18 @@ numpad.Register( "k_hbrk", function( pl, ent, keydown )
 	
 	if keydown and ent:GetIsCruiseModeOn() then
 		ent:SetIsCruiseModeOn( false )
-	end
+	end*/
 end )
 
 numpad.Register( "k_ccon", function( pl, ent, keydown )
 	if not IsValid(pl) or not IsValid(ent) then return false end
 	
-	if keydown then
-		if ent:GetIsCruiseModeOn() then
-			ent:SetIsCruiseModeOn( false )
-		else
-			ent:SetIsCruiseModeOn( true )
-			ent.cc_speed = math.Round(ent:GetVelocity():Length(),0)
-		end
-	end
+
 end )
 
 numpad.Register( "k_hrn", function( pl, ent, keydown )
 	if not IsValid(pl) or not IsValid(ent) then return false end
-	ent.KeyPressedTime = isnumber( ent.KeyPressedTime ) and ent.KeyPressedTime or 0
-
+	
 	local v_list = list.Get( "simfphys_lights" )[ent.LightsTable] or false
 	
 	if keydown then
@@ -221,7 +201,7 @@ numpad.Register( "k_eng", function( pl, ent, keydown )
 	
 	if keydown then
 		if ent:EngineActive() then
-			ent:StopEngine()
+			//ent:StopEngine()
 		else
 			ent:StartEngine( true )
 		end
@@ -232,10 +212,12 @@ numpad.Register( "k_lock", function( pl, ent, keydown )
 	if not IsValid(pl) or not IsValid(ent) then return false end
 	
 	if keydown then
-		if ent:GetIsVehicleLocked() then
-			ent:UnLock()
+		if ent.VehicleLocked then
+			ent.VehicleLocked = false
+			ent:EmitSound( "doors/latchunlocked1.wav" )
 		else
-			ent:Lock()
+			ent.VehicleLocked = true
+			ent:EmitSound( "doors/latchlocked2.wav" )
 		end
 	end
 end )
@@ -262,7 +244,7 @@ numpad.Register( "k_lgts", function( pl, ent, keydown )
 	if keydown then
 		ent.KeyPressedTime = Time
 	else
-		if ent.KeyPressedTime and (Time - ent.KeyPressedTime) >= (ent.LightsActivated and 0.22 or 0) then
+		if (Time - ent.KeyPressedTime) >= (ent.LightsActivated and 0.22 or 0) then
 			if (ent.NextLightCheck or 0) > Time then return end
 			
 			local vehiclelist = list.Get( "simfphys_lights" )[ent.LightsTable] or false

@@ -20,7 +20,7 @@ function ENT:SetupDataTables()
 	end
 end
 
-if SERVER then
+//if SERVER then
 	function ENT:Initialize()	
 		self:SetModel( "models/props_vehicles/tire001c_car.mdl" )
 		self:PhysicsInit( SOLID_VPHYSICS )
@@ -28,9 +28,7 @@ if SERVER then
 		self:SetSolid( SOLID_VPHYSICS )
 		self:SetCollisionGroup( COLLISION_GROUP_WEAPON  ) 
 		self:SetUseType( SIMPLE_USE )
-		self:AddFlags( FL_OBJECT )
-		self:AddEFlags( EFL_NO_PHYSCANNON_INTERACTION )
-
+		
 		self:DrawShadow( false )
 
 		self.OldMaterial = ""
@@ -55,11 +53,12 @@ if SERVER then
 			self.WheelDust:Activate()
 			self.WheelDust:SetParent( self )
 			self.WheelDust.DoNotDuplicate = true
-
+			
 			simfphys.SetOwner( self.EntityOwner, self.WheelDust )
-
-			if not istable( StormFox ) and not istable( StormFox2 ) then return end
-
+			
+			
+			if not istable( StormFox ) or not isfunction( StormFox.IsRaining ) then return end
+			
 			self.WheelSplash = ents.Create( "info_particle_system" )
 			self.WheelSplash:SetKeyValue( "effect_name" , "WheelSplashForward")
 			self.WheelSplash:SetKeyValue( "start_active" , 0)
@@ -70,17 +69,33 @@ if SERVER then
 			self.WheelSplash:Activate()
 			self.WheelSplash:SetParent( self )
 			self.WheelSplash.DoNotDuplicate = true
-
+			
 			simfphys.SetOwner( self.EntityOwner, self.WheelSplash )
 		end)
 		
-		self.snd_roll = "simulated_vehicles/sfx/concrete_roll.wav"
-		self.snd_roll_dirt = "simulated_vehicles/sfx/dirt_roll.wav"
-		self.snd_roll_grass = "simulated_vehicles/sfx/grass_roll.wav"
+		timer.Simple(0.02,function()
+		self.snd_roll_dirt = "eziam/raceattack/surface_dirt-0"..self:GetBaseEnt().wheelnum..".wav"
+		self.snd_roll_grass = "eziam/raceattack/surface_grass-0"..self:GetBaseEnt().wheelnum..".wav"
 		
-		self.snd_skid = "simulated_vehicles/sfx/concrete_skid.wav"
-		self.snd_skid_dirt = "simulated_vehicles/sfx/dirt_skid.wav"
-		self.snd_skid_grass = "simulated_vehicles/sfx/grass_skid.wav"
+		//if SW.GetCurrentWeather().ID == "rain" then
+			//self.snd_roll = "simulated_vehicles/sfx/concrete_roll_wet.wav"
+			//self.snd_skid = "simulated_vehicles/sfx/concrete_skid_wet.wav"
+		//else
+			self.snd_roll = "eziam/raceattack/surface_asphalt-0"..self:GetBaseEnt().wheelnum..".wav"
+			self.snd_skid = "eziam/raceattack/skid_asphalt-0"..self:GetBaseEnt().wheelnum..".wav"
+		//end
+		self.snd_skid_dirt = "eziam/raceattack/skid_dirt-0"..self:GetBaseEnt().wheelnum..".wav"
+		self.snd_skid_grass = "eziam/raceattack/skid_grass-0"..self:GetBaseEnt().wheelnum..".wav"
+		if(self:GetBaseEnt().InvisWheels) then
+			self.snd_roll_dirt = "common/null.wav"
+			self.snd_roll_grass = "common/null.wav"
+			self.snd_roll = "common/null.wav"
+			self.snd_skid = "common/null.wav"
+			self.snd_skid_dirt = "common/null.wav"
+			self.snd_skid_grass = "common/null.wav"
+			self.snd_skid = "common/null.wav"
+			self.snd_skid = "common/null.wav"
+		end
 		
 		self.RollSound = CreateSound(self, self.snd_roll)
 		self.RollSound_Dirt = CreateSound(self, self.snd_roll_dirt)
@@ -89,18 +104,14 @@ if SERVER then
 		self.Skid = CreateSound(self, self.snd_skid)
 		self.Skid_Dirt = CreateSound(self, self.snd_skid_dirt)
 		self.Skid_Grass = CreateSound(self, self.snd_skid_grass)
+		self:GetBaseEnt().wheelnum = self:GetBaseEnt().wheelnum + 1
+		end)
 	end
 	
 	function ENT:Use( ply )
 		local base = self:GetBaseEnt()
 		if not IsValid( base ) then return end
-
-		if base:GetIsVehicleLocked() or base:HasPassengerEnemyTeam( ply ) then 
-			base:EmitSound( "doors/default_locked.wav" )
-
-			return
-		end
-
+		
 		base:SetPassenger( ply )
 	end
 
@@ -130,32 +141,16 @@ if SERVER then
 	end
 
 	function ENT:CheckWeather()
-		if not istable( StormFox ) and not istable( StormFox2 ) then return end
+		if not istable( StormFox ) or not isfunction( StormFox.IsRaining ) then return end
 
-		if istable( StormFox ) then
-			if isfunction( StormFox.IsRaining ) then
-				if StormFox.IsRaining() then
-					self.RainDetected = true
-					self.snd_roll = "simulated_vehicles/sfx/concrete_roll_wet.wav"
-					self.snd_skid = "simulated_vehicles/sfx/concrete_skid_wet.wav"
-				else
-					self.RainDetected = false
-					self.snd_roll = "simulated_vehicles/sfx/concrete_roll.wav"
-					self.snd_skid = "simulated_vehicles/sfx/concrete_skid.wav"
-				end
-			end
+		if StormFox.IsRaining() then
+			self.RainDetected = true
+			self.snd_roll = "simulated_vehicles/sfx/concrete_roll_wet.wav"
+			self.snd_skid = "simulated_vehicles/sfx/concrete_skid_wet.wav"
 		else
-			if istable( StormFox2.Weather ) and isfunction( StormFox2.Weather.IsRaining ) then
-				if StormFox2.Weather:IsRaining() then
-					self.RainDetected = true
-					self.snd_roll = "simulated_vehicles/sfx/concrete_roll_wet.wav"
-					self.snd_skid = "simulated_vehicles/sfx/concrete_skid_wet.wav"
-				else
-					self.RainDetected = false
-					self.snd_roll = "simulated_vehicles/sfx/concrete_roll.wav"
-					self.snd_skid = "simulated_vehicles/sfx/concrete_skid.wav"
-				end
-			end
+			self.RainDetected = false
+			self.snd_roll = "simulated_vehicles/sfx/concrete_roll.wav"
+			self.snd_skid = "simulated_vehicles/sfx/concrete_skid.wav"
 		end
 	end
 	
@@ -164,9 +159,10 @@ if SERVER then
 		local SkidSound = math.Clamp( self:GetSkidSound(),0,255)
 		local Speed = self:GetVelocity():Length()
 		local WheelOnGround = self:GetOnGround()
-		local EnableDust = (Speed * WheelOnGround > 200)	
+		local EnableDust = (Speed * WheelOnGround > 200) and not self:GetBaseEnt().InvisWheels		
 		local Material = self:GetSurfaceMaterial()
 		local GripLoss = self:GetGripLoss()
+		
 		
 		if EnableDust ~= self.OldVar then
 			self.OldVar = EnableDust
@@ -248,7 +244,7 @@ if SERVER then
 		local SkidSound = math.Clamp( self:GetSkidSound(),0,255)
 		local Speed = self:GetVelocity():Length()
 		local WheelOnGround = self:GetOnGround()
-		local EnableDust = (Speed * WheelOnGround > 200)	
+		local EnableDust = (Speed * WheelOnGround > 200) and not self:GetBaseEnt().InvisWheels		
 		local Material = self:GetSurfaceMaterial()
 		local GripLoss = self:GetGripLoss()
 		
@@ -336,13 +332,13 @@ if SERVER then
 			end
 			
 			if Material == "grass" then
-				self.RollSound_Grass:ChangeVolume(math.Clamp((ForwardSpeed - 100) / 1600,0,1), 0) 
+				self.RollSound_Grass:ChangeVolume(math.Clamp((ForwardSpeed - 100) / 1600,0,1)*0.6, 0) 
 				self.RollSound_Grass:ChangePitch(80 + math.Clamp((ForwardSpeed - 100) / 250,0,255), 0) 
 			elseif Material == "dirt" or Material == "sand" then
-				self.RollSound_Dirt:ChangeVolume(math.Clamp((ForwardSpeed - 100) / 1600,0,1), 0) 
+				self.RollSound_Dirt:ChangeVolume(math.Clamp((ForwardSpeed - 100) / 800,0,1), 0) 
 				self.RollSound_Dirt:ChangePitch(80 + math.Clamp((ForwardSpeed - 100) / 250,0,255), 0) 
 			else
-				self.RollSound:ChangeVolume(math.Clamp((ForwardSpeed - 100) / 1500,0,1), 0) 
+				self.RollSound:ChangeVolume(math.Clamp((ForwardSpeed - 100) / 1500,0,1)*0.6, 0) 
 				self.RollSound:ChangePitch(100 + math.Clamp((ForwardSpeed - 400) / 200,0,255), 0) 
 			end
 		end
@@ -405,14 +401,14 @@ if SERVER then
 			end
 			
 			if Material == "grass" or Material == "snow" then
-				self.Skid_Grass:ChangeVolume( math.Clamp(SkidSound,0,1) ) 
+				self.Skid_Grass:ChangeVolume( math.Clamp(SkidSound,0,1)*0.75 ) 
 				self.Skid_Grass:ChangePitch(math.min(90 + (SkidSound * Speed / 500),150)) 
 			elseif Material == "dirt" or Material == "sand" then
-				self.Skid_Dirt:ChangeVolume( math.Clamp(SkidSound,0,1) * 0.8) 
+				self.Skid_Dirt:ChangeVolume( math.Clamp(SkidSound,0,1) * 0.75) 
 				self.Skid_Dirt:ChangePitch(math.min(120 + (SkidSound * Speed / 500),150)) 
 			else
-				self.Skid:ChangeVolume( math.Clamp(SkidSound * 0.5,0,1) ) 
-				self.Skid:ChangePitch(math.min(85 + (SkidSound * Speed / 800) + GripLoss * 22,150)) 
+				self.Skid:ChangeVolume( math.Clamp(SkidSound * 0.5,0,1)*0.75 ) 
+				self.Skid:ChangePitch(math.min(100 + (SkidSound * Speed / 800) + GripLoss * 22,175)) 
 			end
 		end
 	end
@@ -435,10 +431,13 @@ if SERVER then
 	end
 
 	function ENT:PhysicsCollide( data, physobj )
-		if data.Speed > 100 and data.DeltaTime > 0.2 then
-			if data.Speed > 400 then 
+		if data.Speed > 75 and data.DeltaTime > 0.2 and not self:GetBaseEnt().InvisWheels then
+			if data.Speed > 175 then 
 				self:EmitSound( "Rubber_Tire.ImpactHard" )
-				self:EmitSound( "simulated_vehicles/suspension_creak_".. math.random(1,6) ..".ogg" )
+				self:EmitSound( "eziam/raceattack/suspension-0".. math.random(1,9) ..".wav", 75, math.random(100,115),1,CHAN_STATIC )
+				net.Start("impactshake")
+				net.WriteFloat(math.Clamp(data.Speed,0,500))
+				net.Send(self:GetBaseEnt():GetDriver())
 			else 
 				self:EmitSound( "Rubber.ImpactSoft" )
 			end
@@ -489,7 +488,7 @@ if SERVER then
 		if new == true then
 			self.dRadius = self:BoundingRadius() * 0.28
 			
-			self:EmitSound( "simulated_vehicles/sfx/tire_break.ogg" )
+			self:EmitSound( "eziam/raceattack/tireblow.wav", 80 )
 			
 			if IsValid(self.GhostEnt) then
 				self.GhostEnt:SetParent( nil )
@@ -525,9 +524,10 @@ if SERVER then
 			BaseEnt:SetSuspension( self.Index , new )
 		end
 	end
-end
+//end
 
 if CLIENT then
+	local skidtex = Material("pga/skidmark")
 	function ENT:Initialize()	
 		self.FadeHeat = 0
 		
@@ -550,27 +550,41 @@ if CLIENT then
 	end
 
 	function ENT:ManageSmoke()
-
 		local BaseEnt = self:GetBaseEnt()
 		if not IsValid( BaseEnt ) then return end
-
-		if LocalPlayer():GetPos():DistToSqr(self:GetPos()) > 6000 * 6000 or not BaseEnt:GetActive() then return end
+		if(GetConVar("pga_disable_tire_particles"):GetInt() != 0) then return end
+		if(BaseEnt:GetNWBool("inviswheels")) then return end
+		
 		local WheelOnGround = self:GetOnGround()
 		local GripLoss = self:GetGripLoss()
 		local Material = self:GetSurfaceMaterial()
 		
-		if WheelOnGround > 0 and (Material == "concrete" or Material == "rock" or Material == "tile") and GripLoss > 0 then
-			self.FadeHeat = math.Clamp( self.FadeHeat + GripLoss * 0.06,0,10)
+		if WheelOnGround > 0 and (Material == "default" or Material == "brick" or Material == "concrete" or Material == "rock" or Material == "tile" or Material == "metal" or Material == "wood" or Material == "glass") and GripLoss > 0 then
+			self.FadeHeat = math.Clamp( self.FadeHeat + GripLoss * 0.25,0,10)
 		else
 			self.FadeHeat = self.FadeHeat * 0.995
 		end
+
 			
-		local Scale = self.FadeHeat ^ 3 * 0.001
+		local Scale = self.FadeHeat ^ 3 / 1000
 		local SmokeOn = (self.FadeHeat >= 7)
 		local DirtOn = GripLoss > 0.05
-		local lcolor = BaseEnt:GetTireSmokeColor() * 255
+		local lcolor = (BaseEnt:GetTireSmokeColor() or Vector(1,1,1)) * 255
+		local lcolor_h, lcolor_s, lcolor_v = ColorToHSV( Color( lcolor.r, lcolor.g, lcolor.b ) )
 		local Speed = self:GetVelocity():Length()
 		local OnRim = self:GetDamaged()
+		local hsv = Color(255,0,0)
+		BaseEnt.RainbowColor = BaseEnt.RainbowColor or 0
+
+		if(IsValid(BaseEnt:GetDriver()) && BaseEnt:GetDriver():PS_HasItemEquipped("rainbowsmoke")) then
+			if BaseEnt.RainbowColor >= 360 then
+				BaseEnt.RainbowColor = 0
+			end
+			BaseEnt.RainbowColor = BaseEnt.RainbowColor + FrameTime()*30
+			hsv = HSVToColor(BaseEnt.RainbowColor % 360, 1, 1)
+			lcolor = Color(hsv.r,hsv.g,hsv.b)
+			lcolor_h, lcolor_s, lcolor_v = ColorToHSV( lcolor )
+		end
 		
 		local Forward = self:GetForward()
 		local Dir = (BaseEnt:GetGear() < 2) and Forward or -Forward
@@ -587,6 +601,12 @@ if CLIENT then
 				effectdata:SetStart( Vector( lcolor.r, lcolor.g, lcolor.b ) )
 				effectdata:SetEntity( NULL )
 			util.Effect( "simfphys_tiresmoke", effectdata )
+			if((self.FadeHeat >= 1) && CurTime() > (self.MarkDel or 0) && GetConVar("r_decals"):GetInt() > 0) then
+				local trs = util.TraceLine({start=self:GetPos(), endpos=self:GetPos() + vector_up*-(WheelSize+2), filter=self, mask=MASK_SOLID_BRUSHONLY})
+				local dir = self:GetVelocity():GetNormalized()
+	      		util.DecalEx(skidtex, game.GetWorld(), trs.HitPos, trs.HitNormal+Vector(dir.x,dir.y,0), Color(lcolor.r*(lcolor_s/2),lcolor.g*(lcolor_s/2),lcolor.b*(lcolor_s/2),255*math.min((self.FadeHeat-7)/9,0.75)*math.min(Speed/600,1)), math.max(Speed/300,0), 0.5)
+	      		self.MarkDel = CurTime() + 0.03
+			end
 		end
 		
 		if WheelOnGround == 0 then return end
@@ -604,7 +624,6 @@ if CLIENT then
 		if (Speed > 150 or DirtOn) and OnRim then
 			self:MakeSparks( GripLoss, Dir, Pos, WheelSize )
 		end
-
 	end
 
 	function ENT:MakeSparks( Scale, Dir, Pos, WheelSize )

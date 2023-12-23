@@ -14,24 +14,6 @@ local RearProjectedLights = true
 local Shadows = false
 local vtable = istable( vtable ) and vtable or {}
 
-
-cvars.AddChangeCallback( "cl_simfphys_hidesprites", function( convar, oldValue, newValue ) SpritesDisabled = ( tonumber( newValue )~=0 ) end)
-
-cvars.AddChangeCallback( "cl_simfphys_frontlamps", function( convar, oldValue, newValue ) FrontProjectedLights = ( tonumber( newValue )~=0 ) end)
-
-cvars.AddChangeCallback( "cl_simfphys_rearlamps", function( convar, oldValue, newValue ) RearProjectedLights = ( tonumber( newValue )~=0 ) end)
-
-cvars.AddChangeCallback( "cl_simfphys_shadows", function( convar, oldValue, newValue ) Shadows = ( tonumber( newValue )~=0 ) end)
-
-
-SpritesDisabled = GetConVar( "cl_simfphys_hidesprites" ):GetBool()
-
-FrontProjectedLights = GetConVar( "cl_simfphys_frontlamps" ):GetBool()
-
-RearProjectedLights = GetConVar( "cl_simfphys_rearlamps" ):GetBool()
-
-Shadows = GetConVar( "cl_simfphys_shadows" ):GetBool()
-
 local function BodyGroupIsValid( bodygroups, entity )
 	for index, groups in pairs( bodygroups ) do
 		local mygroup = entity:GetBodygroup( index )
@@ -255,8 +237,8 @@ local function ManageProjTextures()
 							end
 						end
 						
-						proj.projector:SetPos( pos + vel ) 
-						proj.projector:SetAngles( ang ) 
+						proj.projector:SetPos( ent:GetPos()+ent:GetForward()*ent:OBBMaxs().x ) 
+						proj.projector:SetAngles( ent:GetAngles()+Angle(12,0,0) ) 
 						proj.projector:Update()
 					end
 				end
@@ -276,16 +258,16 @@ local function SetupProjectedTextures( ent , vehiclelist )
 		ent.Projtexts["FL"] = {
 			trigger = 2,
 			ontrigger = {
-				mat = "effects/flashlight/headlight_highbeam",
-				FarZ = 3000,
+				mat = "effects/flashlight/headlight_lowbeam",
+				FarZ = 1000,
 				brightness = 2.5,
 			},
 			pos = vehiclelist.L_HeadLampPos,
 			ang = vehiclelist.L_HeadLampAng,
-			mat = "effects/flashlight/headlight_lowbeam",
+			mat = "effects/flashlight/headlight_highbeam",
 			col = proj_col,
-			brightness = 2,
-			FarZ = 1000,
+			brightness = 3,
+			FarZ = 3000,
 			NearZ = 75,
 			Fov = 80,
 		}
@@ -295,16 +277,16 @@ local function SetupProjectedTextures( ent , vehiclelist )
 		ent.Projtexts["FR"] = {
 			trigger = 2,
 			ontrigger = {
-				mat = "effects/flashlight/headlight_highbeam",
-				FarZ = 3000,
+				mat = "effects/flashlight/headlight_lowbeam",
+				FarZ = 1000,
 				brightness = 2.5,
 			},
 			pos = vehiclelist.R_HeadLampPos,
 			ang = vehiclelist.R_HeadLampAng,
-			mat = "effects/flashlight/headlight_lowbeam",
+			mat = "effects/flashlight/headlight_highbeam",
 			col = proj_col,
-			brightness = 2,
-			FarZ = 1000,
+			brightness = 3,
+			FarZ = 3000,
 			NearZ = 75,
 			Fov = 80,
 		}
@@ -875,11 +857,11 @@ local function spritedamage( length )
 				local Dist = (spritepos - pos):Length() 
 				
 				if Dist < Rad then
-					veh.Sprites[i].Damaged = true
+					//veh.Sprites[i].Damaged = true
 					
-					if sprite.trigger >= 6 then
+					/*if sprite.trigger >= 6 then
 						veh.turnsignals_damaged = true
-					end
+					end*/
 					
 					local effectdata = EffectData()
 						effectdata:SetOrigin( spritepos )
@@ -887,14 +869,14 @@ local function spritedamage( length )
 					
 					if veh.NextImpactsnd < curtime then
 						veh.NextImpactsnd = curtime + 0.05
-						sound.Play(glassimpact, spritepos, 75)
+						sound.Play("pga/physics/carglass-0"..math.random(1,6)..".wav", spritepos, 80, math.random(90,110))
 					end
 				end
 			end
 		end
 	end
 	
-	if istable( veh.Projtexts ) then
+	/*if istable( veh.Projtexts ) then
 		
 		for i, proj in pairs( veh.Projtexts ) do
 			
@@ -928,12 +910,12 @@ local function spritedamage( length )
 					
 					if veh.NextImpactsnd < curtime then
 						veh.NextImpactsnd = curtime + 0.05
-						sound.Play(glassimpact, spritepos, 75)
+						sound.Play("pga/physics/carglass-0"..math.random(1,6)..".wav", spritepos, 75, math.random(100,110))
 					end
 				end
 			end
 		end
-	end
+	end*/
 end
 net.Receive("simfphys_spritedamage", spritedamage)
 
@@ -963,31 +945,3 @@ local function spriterepair( length )
 	end
 end
 net.Receive("simfphys_lightsfixall", spriterepair)
-
-
-net.Receive( "simfphys_turnsignal", function( length )
-	local ent = net.ReadEntity()
-	local turnmode = net.ReadInt( 32 ) 
-	
-	if not IsValid( ent ) then return end
-	
-	if turnmode == 0 then
-		ent.signal_left = false
-		ent.signal_right = false
-	end
-	
-	if turnmode == 1 then
-		ent.signal_left = true
-		ent.signal_right = true
-	end
-	
-	if turnmode == 2 then
-		ent.signal_left = true
-		ent.signal_right = false
-	end
-	
-	if turnmode == 3 then
-		ent.signal_left = false
-		ent.signal_right = true
-	end
-end )

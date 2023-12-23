@@ -367,7 +367,7 @@ local light_table = {
 	L_RearLampAng = Angle(45,180,0),
 	R_RearLampPos = Vector( -102.69,-29.97,34.21),
 	R_RearLampAng = Angle(45,180,0),
-
+	
 	Headlight_sprites = { 
 		Vector(91.33,30.44,30.63),
 		Vector(91.33,-30.44,30.63)

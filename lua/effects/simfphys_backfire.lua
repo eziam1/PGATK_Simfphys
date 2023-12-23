@@ -31,29 +31,16 @@ function EFFECT:Init( data )
 			local Pos = Entity:LocalToWorld( lPos ) + Vel * FrameTime() * 0.5
 			local Ang = Entity:LocalToWorldAngles( lAng )
 			
-			local snd1 = "simulated_vehicles/sfx/ex_backfire_damaged_"..math.Round(math.random(1,3),1)..".ogg"
+			local snd1 = "simulated_vehicles/sfx/ex_backfire_damaged_"..math.Round(math.random(1,3),1)..".wav"
 			local snd2 = Entity:GetBackfireSound()
 			if snd2 == "" then
-				snd2 =  "simulated_vehicles/sfx/ex_backfire_"..math.Round(math.random(1,4),1)..".ogg"
+				snd2 =  "eziam/raceattack/backfire-0"..math.random(1,5)..".wav"
 			end
 			
-			local snd = bdamaged and snd1 or snd2
-			
-			Entity.CurBackFireSound = CreateSound( Entity, snd )
-			Entity.CurBackFireSound:Play()
-			
-			Entity:CallOnRemove( "stopbfsounds", function( Entity )
-				if Entity.CurBackFireSound then
-					Entity.CurBackFireSound:Stop()
-				end
-			end)
-			
-			timer.Simple(5, function() 
-				if not IsValid( Entity ) then return end
-				if Entity.CurBackFireSound then
-					Entity.CurBackFireSound:Stop()
-				end
-			end )
+			local snd = snd2
+			//local snd = bdamaged and snd1 or snd2
+			local pitch = math.random(100,120)
+			sound.Play( snd, Pos, 85, pitch )
 			
 			local dlight = DynamicLight( Entity:EntIndex() * math.random(1,4) )
 			if dlight then

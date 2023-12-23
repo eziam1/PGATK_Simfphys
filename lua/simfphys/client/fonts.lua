@@ -1,5 +1,3 @@
-surface.CreateFont( "simfphysworldtip", {font="coolvetica", size=24, weight=500, antialias=true, additive=false} )
-
 surface.CreateFont( "simfphysfont", {
 	font = "Verdana",
 	extended = false,
@@ -85,42 +83,6 @@ surface.CreateFont( "DSimfphysFont", {
 	symbol = false,
 	rotary = false,
 	shadow = false,
-	additive = false,
-	outline = false,
-} )
-
-surface.CreateFont( "DSimfphysFont_hint", {
-	font = "Arial", 
-	extended = false,
-	size = 21,
-	weight = 500,
-	blursize = 0,
-	scanlines = 0,
-	antialias = true,
-	underline = true,
-	italic = false,
-	strikeout = false,
-	symbol = false,
-	rotary = false,
-	shadow = false,
-	additive = false,
-	outline = false,
-} )
-
-surface.CreateFont( "SimfphysFont_seatswitcher", {
-	font = "Verdana",
-	extended = false,
-	size = 16,
-	weight = 2000,
-	blursize = 0,
-	scanlines = 0,
-	antialias = true,
-	underline = false,
-	italic = false,
-	strikeout = false,
-	symbol = false,
-	rotary = false,
-	shadow = true,
 	additive = false,
 	outline = false,
 } )

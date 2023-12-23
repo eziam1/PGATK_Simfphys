@@ -602,10 +602,8 @@ local function buildserversettingsmenu( self )
 	Background:SetSize( 350, y )
 end
 
-local function PopulateVehicles( pnlContent, original_tree, original_node, usenode )
-	local node = usenode and original_node or original_tree
 
-	local tree = node:AddNode( usenode and "simfphys" or "[simfphys]", "icon16/simfphys.png" )
+hook.Add( "SimfphysPopulateVehicles", "AddEntityContent", function( pnlContent, tree, node )
 
 	local Categorised = {}
 
@@ -625,26 +623,12 @@ local function PopulateVehicles( pnlContent, original_tree, original_node, useno
 	--
 	-- Add a tree node for each category
 	--
-
-	local IconList = list.Get( "ContentCategoryIcons" )
-
 	for CategoryName, v in SortedPairs( Categorised ) do
-		local node
 
-		if CategoryName == "Base" then
-			node = tree
-		else
-			local Icon = "icon16/simfphys_noicon.png"
-
-			if IconList and IconList[ "[simfphys] - "..CategoryName ] then
-				Icon = IconList[ "[simfphys] - "..CategoryName ]
-			end
-
-			-- Add a node to the tree
-			node = tree:AddNode( CategoryName, Icon )
-		end
-
-		-- When we click on the node - populate it using this function
+		-- Add a node to the tree
+		local node = tree:AddNode( CategoryName, "icon16/bricks.png" )
+		
+			-- When we click on the node - populate it using this function
 		node.DoPopulate = function( self )
 			
 			-- If we've already populated it - forget it.
@@ -749,17 +733,23 @@ local function PopulateVehicles( pnlContent, original_tree, original_node, useno
 		pnlContent:SwitchPanel( self.PropPanel )
 	end
 
-	-- call original hook
-	hook.Run( "SimfphysPopulateVehicles", pnlContent, tree, node )
-end
-
-timer.Simple(0, function()
-	if LVS then
-		hook.Add( "LVS.PopulateVehicles", "!!!add_simfphys_vehicles", function( lvsNode, pnlContent, tree ) PopulateVehicles( pnlContent, tree, lvsNode, true ) end )
-	else
-		hook.Add( "PopulateVehicles", "!!!add_simfphys_vehicles", PopulateVehicles )
+	
+	-- Select the first node
+	local FirstNode = tree:Root():GetChildNode( 0 )
+	if IsValid( FirstNode ) then
+		FirstNode:InternalDoClick()
 	end
-end)
+
+end )
+
+spawnmenu.AddCreationTab( "simfphys", function()
+
+	local ctrl = vgui.Create( "SpawnmenuContentPanel" )
+	ctrl:CallPopulateHook( "SimfphysPopulateVehicles" )
+	return ctrl
+
+end, "icon16/car.png", 50 )
+
 
 spawnmenu.AddContentType( "simfphys_vehicles", function( container, obj )
 	if not obj.material then return end
@@ -794,8 +784,3 @@ spawnmenu.AddContentType( "simfphys_vehicles", function( container, obj )
 	return icon
 
 end )
-
-list.Set( "ContentCategoryIcons", "simfphys", "icon16/simfphys.png" )
-list.Set( "ContentCategoryIcons", "[simfphys] - Half Life 2 - Prewar", "icon16/simfphys_prewar.png" )
-list.Set( "ContentCategoryIcons", "[simfphys] - Half Life 2 / Synergy", "icon16/simfphys_hl2.png" )
-list.Set( "ContentCategoryIcons", "[simfphys] - Armed Vehicles", "icon16/simfphys_armed.png" )

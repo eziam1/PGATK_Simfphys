@@ -22,20 +22,16 @@ function EFFECT:Init( data )
 	local Pos = data:GetOrigin()
 	
 	self:Explosion( Pos )
-	
-	local random = math.random(1,3)
-	
-	if random == 1 then
-		sound.Play( "ambient/explosions/explode_3.wav", Pos, 95, 100, 1 )
-	elseif random == 2 then
-		sound.Play( "ambient/explosions/explode_8.wav", Pos, 95, 140, 1 )
-	else
-		sound.Play( "ambient/explosions/explode_5.wav", Pos, 95, 100, 1 )
-	end
 end
 
 function EFFECT:Explosion( pos )
 	local emitter = ParticleEmitter( pos, false )
+	//sound.Play( "pga/physics/explodebass-0"..math.random(1,6)..".wav", pos, 100, math.random(90,110), 1 )
+	sound.Play( ")pga/physics/explodenoise-"..math.random(1,10)..".wav", pos, 110, math.random(80,100), 1 )
+	timer.Simple(0.05,function()
+		sound.Play( "pga/physics/carexplode-0"..math.random(1,8)..".wav", pos, 110, math.random(90,110), 1 )
+		sound.Play( ")pga/physics/explodeambient-0"..math.random(1,2)..".wav", pos, 110, math.random(80,100), 1 )
+	end)
 	
 	if emitter then
 		for i = 0,60 do

@@ -1,8 +1,6 @@
 hook.Add("CalcMainActivity", "simfphysSeatActivityOverride", function(ply)
-	local veh = ply:GetSimfphys()
-
-	if not IsValid( veh ) then return end
-
+	if not IsValid( ply:GetSimfphys() ) then return end
+	
 	if ply.m_bWasNoclipping then 
 		ply.m_bWasNoclipping = nil 
 		ply:AnimResetGestureSlot( GESTURE_SLOT_CUSTOM ) 
@@ -11,11 +9,13 @@ hook.Add("CalcMainActivity", "simfphysSeatActivityOverride", function(ply)
 			ply:SetIK( true )
 		end 
 	end 
-
+	
+	local IsDriverSeat = ply:IsDrivingSimfphys()
+	
 	ply.CalcIdeal = ACT_HL2MP_SIT
-	ply.CalcSeqOverride = isfunction( veh.GetSeatAnimation ) and veh:GetSeatAnimation( ply ) or -1
+	ply.CalcSeqOverride = IsDriverSeat and ply:LookupSequence( "drive_jeep" ) or -1
 
-	if not ply:IsDrivingSimfphys() and ply:GetAllowWeaponsInVehicle() and IsValid( ply:GetActiveWeapon() ) then
+	if not IsDriverSeat and ply:GetAllowWeaponsInVehicle() and IsValid( ply:GetActiveWeapon() ) then
 		
 		local holdtype = ply:GetActiveWeapon():GetHoldType()
 		
@@ -41,10 +41,13 @@ hook.Add("UpdateAnimation", "simfphysPoseparameters", function(ply , vel, seq)
 		
 		if not IsValid( Car ) then return end
 		
+		if(ply:GetPoseParameterName(9) != nil) then
 		local Steer = Car:GetVehicleSteer()
-		
-		ply:SetPoseParameter( "vehicle_steer", Steer )
-		ply:InvalidateBoneCache()
+		local flMin, flMax = ply:GetPoseParameterRange(9)
+		local sPose = ply:GetPoseParameterName(9)
+			ply:SetPoseParameter( ply:GetPoseParameterName(9), Lerp(FrameTime()*6, math.Remap(ply:GetPoseParameter(sPose), 0, 1, flMin, flMax), Steer/3) )
+			ply:InvalidateBoneCache()
+		end
 		
 		GAMEMODE:GrabEarAnimation( ply ) 
  		GAMEMODE:MouthMoveAnimation( ply ) 
